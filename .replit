@@ -1,0 +1,62 @@
+
+modules = ["nodejs-20", "web", "postgresql-16"]
+run = "npm run dev"
+hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["yt-dlp"]
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+run = ["npm", "run", "start"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[env]
+PORT = "5000"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 5000
+
+[agent]
+integrations = ["javascript_gemini:1.0.0", "javascript_database:1.0.0"]
+
+[agent.capabilities]
+# Permitir que o Agent modifique todos os arquivos do projeto
+editFiles = true
+createFiles = true
+deleteFiles = true
+runCommands = true
+
+[agent.context]
+# Definir contexto do projeto para o Agent
+projectType = "video-processing-web-app"
+techStack = ["react", "typescript", "express", "tailwindcss", "shadcn-ui"]
+mainFiles = [
+  "client/src/App.tsx",
+  "client/src/pages/Home.tsx",
+  "server/index.ts",
+  "server/routes.ts"
+]
