@@ -20,6 +20,7 @@ export interface IStorage {
   createVideoCut(cut: InsertVideoCut): Promise<VideoCut>;
   getVideoCut(id: string): Promise<VideoCut | undefined>;
   getVideoCutsByVideoId(videoId: string): Promise<VideoCut[]>;
+  updateVideoCut(id: string, updates: Partial<InsertVideoCut>): Promise<VideoCut>;
   
   createProcessedCut(cut: InsertProcessedCut): Promise<ProcessedCut>;
   getProcessedCut(id: string): Promise<ProcessedCut | undefined>;
@@ -63,6 +64,15 @@ export class DatabaseStorage implements IStorage {
       .from(videoCuts)
       .where(eq(videoCuts.videoId, videoId))
       .orderBy(videoCuts.startTime);
+  }
+
+  async updateVideoCut(id: string, updates: Partial<InsertVideoCut>): Promise<VideoCut> {
+    const [updatedCut] = await db
+      .update(videoCuts)
+      .set(updates)
+      .where(eq(videoCuts.id, id))
+      .returning();
+    return updatedCut;
   }
 
   async createProcessedCut(insertProcessedCut: InsertProcessedCut): Promise<ProcessedCut> {

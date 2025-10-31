@@ -242,6 +242,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/videos/:id/stream", async (req, res) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      if (!video) {
+        return res.status(404).json({ error: "Vídeo não encontrado" });
+      }
+
+      const videoPath = video.videoPath;
+      if (!fs.existsSync(videoPath)) {
+        return res.status(404).json({ error: "Arquivo de vídeo não encontrado" });
+      }
+
+      const stat = fs.statSync(videoPath);
+      const fileSize = stat.size;
+      const range = req.headers.range;
+
+      if (range) {
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = (end - start) + 1;
+        const file = fs.createReadStream(videoPath, { start, end });
+        const head = {
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Accept-Ranges': 'bytes',
+          'Content-Length': chunksize,
+          'Content-Type': 'video/mp4',
+        };
+        res.writeHead(206, head);
+        file.pipe(res);
+      } else {
+        const head = {
+          'Content-Length': fileSize,
+          'Content-Type': 'video/mp4',
+        };
+        res.writeHead(200, head);
+        fs.createReadStream(videoPath).pipe(res);
+      }
+    } catch (error: any) {
+      console.error("Erro ao fazer stream do vídeo:", error);
+      res.status(500).json({ error: error.message || "Erro ao fazer stream do vídeo" });
+    }
+  });
+
+  app.put("/api/cuts/:cutId", async (req, res) => {
+    try {
+      const { cutId } = req.params;
+      const { startTime, endTime, description } = req.body;
+
+      const cut = await storage.getVideoCut(cutId);
+      if (!cut) {
+        return res.status(404).json({ error: "Corte não encontrado" });
+      }
+
+      if (startTime !== undefined && endTime !== undefined) {
+        if (startTime < 0 || endTime <= startTime) {
+          return res.status(400).json({ error: "Tempos de corte inválidos" });
+        }
+      }
+
+      const updatedCut = await storage.updateVideoCut(cutId, {
+        startTime: startTime ?? cut.startTime,
+        endTime: endTime ?? cut.endTime,
+        description: description ?? cut.description,
+      });
+
+      res.json(updatedCut);
+    } catch (error: any) {
+      console.error("Erro ao atualizar corte:", error);
+      res.status(500).json({ error: error.message || "Erro ao atualizar corte" });
+    }
+  });
+
   app.post("/api/cuts/:cutId/process", async (req, res) => {
     try {
       const { cutId } = req.params;
