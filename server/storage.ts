@@ -1,37 +1,32 @@
-import { users, videos, type User, type InsertUser, type Video, type InsertVideo } from "@shared/schema";
+import { 
+  videos, 
+  videoCuts, 
+  processedCuts,
+  type Video, 
+  type InsertVideo, 
+  type VideoCut,
+  type InsertVideoCut,
+  type ProcessedCut,
+  type InsertProcessedCut
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  
   createVideo(video: InsertVideo): Promise<Video>;
   getVideo(id: string): Promise<Video | undefined>;
   getAllVideos(): Promise<Video[]>;
-  updateVideoAnalysis(id: string, analysis: string): Promise<Video | undefined>;
+  
+  createVideoCut(cut: InsertVideoCut): Promise<VideoCut>;
+  getVideoCut(id: string): Promise<VideoCut | undefined>;
+  getVideoCutsByVideoId(videoId: string): Promise<VideoCut[]>;
+  
+  createProcessedCut(cut: InsertProcessedCut): Promise<ProcessedCut>;
+  getProcessedCut(id: string): Promise<ProcessedCut | undefined>;
+  getProcessedCutsByCutId(cutId: string): Promise<ProcessedCut[]>;
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user || undefined;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
-    return user;
-  }
-
   async createVideo(insertVideo: InsertVideo): Promise<Video> {
     const [video] = await db
       .insert(videos)
@@ -49,13 +44,46 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(videos).orderBy(desc(videos.uploadedAt));
   }
 
-  async updateVideoAnalysis(id: string, analysis: string): Promise<Video | undefined> {
-    const [video] = await db
-      .update(videos)
-      .set({ analysis })
-      .where(eq(videos.id, id))
+  async createVideoCut(insertCut: InsertVideoCut): Promise<VideoCut> {
+    const [cut] = await db
+      .insert(videoCuts)
+      .values(insertCut)
       .returning();
-    return video || undefined;
+    return cut;
+  }
+
+  async getVideoCut(id: string): Promise<VideoCut | undefined> {
+    const [cut] = await db.select().from(videoCuts).where(eq(videoCuts.id, id));
+    return cut || undefined;
+  }
+
+  async getVideoCutsByVideoId(videoId: string): Promise<VideoCut[]> {
+    return await db
+      .select()
+      .from(videoCuts)
+      .where(eq(videoCuts.videoId, videoId))
+      .orderBy(videoCuts.startTime);
+  }
+
+  async createProcessedCut(insertProcessedCut: InsertProcessedCut): Promise<ProcessedCut> {
+    const [processed] = await db
+      .insert(processedCuts)
+      .values(insertProcessedCut)
+      .returning();
+    return processed;
+  }
+
+  async getProcessedCut(id: string): Promise<ProcessedCut | undefined> {
+    const [processed] = await db.select().from(processedCuts).where(eq(processedCuts.id, id));
+    return processed || undefined;
+  }
+
+  async getProcessedCutsByCutId(cutId: string): Promise<ProcessedCut[]> {
+    return await db
+      .select()
+      .from(processedCuts)
+      .where(eq(processedCuts.cutId, cutId))
+      .orderBy(desc(processedCuts.createdAt));
   }
 }
 

@@ -5,7 +5,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["yt-dlp"]
+packages = ["yt-dlp", "ffmpeg"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -15,6 +15,10 @@ run = ["npm", "run", "start"]
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 35901
+externalPort = 3000
 
 [env]
 PORT = "5000"

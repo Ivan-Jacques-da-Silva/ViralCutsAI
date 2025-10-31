@@ -4,13 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Video, Upload, Link as LinkIcon, Play, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Video, Upload, Link as LinkIcon, Loader2, Scissors, Download, MonitorPlay, Smartphone, Users } from "lucide-react";
+import { Link } from "wouter";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Video as VideoType } from "@shared/schema";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import type { Video as VideoType, VideoCut, ProcessedCut } from "@shared/schema";
+
+interface UploadResponse {
+  video: VideoType;
+  cuts: VideoCut[];
+}
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<"upload" | "url">("upload");
@@ -18,11 +23,10 @@ export default function Home() {
   const [videoUrl, setVideoUrl] = useState("");
   const [uploadTitle, setUploadTitle] = useState("");
   const [urlTitle, setUrlTitle] = useState("");
+  const [currentVideo, setCurrentVideo] = useState<UploadResponse | null>(null);
+  const [selectedCuts, setSelectedCuts] = useState<Set<string>>(new Set());
+  const [selectedFormat, setSelectedFormat] = useState<"horizontal" | "vertical">("vertical");
   const { toast } = useToast();
-
-  const { data: videos, isLoading: isLoadingVideos } = useQuery<VideoType[]>({
-    queryKey: ["/api/videos"],
-  });
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -36,13 +40,14 @@ export default function Home() {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+    onSuccess: (data: UploadResponse) => {
+      setCurrentVideo(data);
       setSelectedFile(null);
       setUploadTitle("");
+      setSelectedCuts(new Set());
       toast({
         title: "Sucesso!",
-        description: "Vídeo enviado e analisado com sucesso",
+        description: `Vídeo analisado! ${data.cuts.length} cortes identificados.`,
       });
     },
     onError: (error: Error) => {
@@ -59,14 +64,36 @@ export default function Home() {
       const response = await apiRequest("POST", "/api/videos/url", data);
       return await response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/videos"] });
+    onSuccess: (data: UploadResponse) => {
+      setCurrentVideo(data);
       setVideoUrl("");
       setUrlTitle("");
+      setSelectedCuts(new Set());
       toast({
         title: "Sucesso!",
-        description: "Vídeo baixado e analisado com sucesso",
+        description: `Vídeo analisado! ${data.cuts.length} cortes identificados.`,
       });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const processMutation = useMutation({
+    mutationFn: async ({ cutId, format }: { cutId: string; format: string }) => {
+      const response = await apiRequest("POST", `/api/cuts/${cutId}/process`, { format });
+      return await response.json();
+    },
+    onSuccess: (data: ProcessedCut) => {
+      toast({
+        title: "Sucesso!",
+        description: "Corte processado com legendas!",
+      });
+      window.open(`/api/processed/${data.id}/download`, "_blank");
     },
     onError: (error: Error) => {
       toast({
@@ -124,29 +151,70 @@ export default function Home() {
     urlMutation.mutate({ url: videoUrl, title: urlTitle });
   };
 
+  const toggleCutSelection = (cutId: string) => {
+    const newSelected = new Set(selectedCuts);
+    if (newSelected.has(cutId)) {
+      newSelected.delete(cutId);
+    } else {
+      newSelected.add(cutId);
+    }
+    setSelectedCuts(newSelected);
+  };
+
+  const handleProcessCuts = () => {
+    if (selectedCuts.size === 0) {
+      toast({
+        title: "Erro",
+        description: "Selecione pelo menos um corte",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    selectedCuts.forEach((cutId) => {
+      processMutation.mutate({ cutId, format: selectedFormat });
+    });
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const isProcessing = uploadMutation.isPending || urlMutation.isPending || processMutation.isPending;
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 justify-between">
             <div className="bg-primary rounded-lg p-2">
-              <Video className="h-6 w-6 text-primary-foreground" />
+              <Scissors className="h-6 w-6 text-primary-foreground" />
             </div>
-            <h1 className="text-2xl font-bold">Análise de Vídeos com IA</h1>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold">Cortador de Vídeos para Reels</h1>
+              <p className="text-sm text-muted-foreground">IA identifica os melhores momentos e gera legendas automáticas</p>
+            </div>
+            <Link href="/accounts">
+              <Button variant="outline" size="sm" data-testid="button-accounts">
+                <Users className="h-4 w-4 mr-2" /> Contas
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "upload" | "url")}>
-              <TabsList className="grid w-full grid-cols-2" data-testid="tabs-navigation">
-                <TabsTrigger value="upload" data-testid="tab-upload">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="upload">
                   <Upload className="h-4 w-4 mr-2" />
                   Upload
                 </TabsTrigger>
-                <TabsTrigger value="url" data-testid="tab-url">
+                <TabsTrigger value="url">
                   <LinkIcon className="h-4 w-4 mr-2" />
                   URL
                 </TabsTrigger>
@@ -157,7 +225,7 @@ export default function Home() {
                   <CardHeader>
                     <CardTitle>Enviar Vídeo</CardTitle>
                     <CardDescription>
-                      Faça upload de um vídeo para análise com IA
+                      Faça upload de um vídeo e a IA identificará os melhores cortes
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -165,39 +233,36 @@ export default function Home() {
                       <Label htmlFor="upload-title">Título (opcional)</Label>
                       <Input
                         id="upload-title"
-                        data-testid="input-upload-title"
                         placeholder="Nome do vídeo"
                         value={uploadTitle}
                         onChange={(e) => setUploadTitle(e.target.value)}
-                        disabled={uploadMutation.isPending}
+                        disabled={isProcessing}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="video-file">Arquivo de Vídeo</Label>
                       <Input
                         id="video-file"
-                        data-testid="input-video-file"
                         type="file"
                         accept="video/*"
                         onChange={handleFileChange}
-                        disabled={uploadMutation.isPending}
+                        disabled={isProcessing}
                       />
                     </div>
                     {selectedFile && (
-                      <p className="text-sm text-muted-foreground" data-testid="text-selected-file">
+                      <p className="text-sm text-muted-foreground">
                         Arquivo selecionado: {selectedFile.name}
                       </p>
                     )}
                     <Button
                       onClick={handleUpload}
-                      disabled={!selectedFile || uploadMutation.isPending}
+                      disabled={!selectedFile || isProcessing}
                       className="w-full"
-                      data-testid="button-upload"
                     >
                       {uploadMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processando...
+                          Analisando vídeo...
                         </>
                       ) : (
                         <>
@@ -215,7 +280,7 @@ export default function Home() {
                   <CardHeader>
                     <CardTitle>Vídeo por URL</CardTitle>
                     <CardDescription>
-                      Cole a URL de um vídeo para baixar e analisar
+                      Cole a URL de YouTube, TikTok, Instagram ou outro vídeo
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -223,34 +288,31 @@ export default function Home() {
                       <Label htmlFor="url-title">Título (opcional)</Label>
                       <Input
                         id="url-title"
-                        data-testid="input-url-title"
                         placeholder="Nome do vídeo"
                         value={urlTitle}
                         onChange={(e) => setUrlTitle(e.target.value)}
-                        disabled={urlMutation.isPending}
+                        disabled={isProcessing}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="video-url">URL do Vídeo</Label>
                       <Input
                         id="video-url"
-                        data-testid="input-video-url"
-                        placeholder="https://example.com/video.mp4"
+                        placeholder="https://youtube.com/watch?v=..."
                         value={videoUrl}
                         onChange={(e) => setVideoUrl(e.target.value)}
-                        disabled={urlMutation.isPending}
+                        disabled={isProcessing}
                       />
                     </div>
                     <Button
                       onClick={handleUrlSubmit}
-                      disabled={!videoUrl || urlMutation.isPending}
+                      disabled={!videoUrl || isProcessing}
                       className="w-full"
-                      data-testid="button-url-submit"
                     >
                       {urlMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processando...
+                          Baixando e analisando...
                         </>
                       ) : (
                         <>
@@ -263,59 +325,110 @@ export default function Home() {
                 </Card>
               </TabsContent>
             </Tabs>
+
+            {currentVideo && (
+              <Card className="mt-4">
+                <CardHeader>
+                  <CardTitle>{currentVideo.video.title}</CardTitle>
+                  <CardDescription>
+                    IA identificou {currentVideo.cuts.length} cortes de 1-2 minutos
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            )}
           </div>
 
           <div>
             <Card>
               <CardHeader>
-                <CardTitle>Vídeos Analisados</CardTitle>
+                <CardTitle>Cortes Identificados</CardTitle>
                 <CardDescription>
-                  Histórico de vídeos processados pela IA
+                  Selecione os cortes para processar
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoadingVideos ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : videos && videos.length > 0 ? (
-                  <div className="space-y-4">
-                    {videos.map((video) => (
-                      <Card key={video.id} className="hover-elevate" data-testid={`card-video-${video.id}`}>
-                        <CardHeader className="pb-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <CardTitle className="text-base" data-testid={`text-title-${video.id}`}>
-                                {video.title || "Sem título"}
-                              </CardTitle>
-                              <CardDescription className="text-xs mt-1">
-                                {video.uploadedAt && format(new Date(video.uploadedAt), "PPp", { locale: ptBR })}
-                              </CardDescription>
-                            </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => window.open(`/api/videos/${video.id}/stream`, "_blank")}
-                              data-testid={`button-play-${video.id}`}
-                            >
-                              <Play className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-sm text-muted-foreground" data-testid={`text-analysis-${video.id}`}>
-                            {video.analysis || "Nenhuma análise disponível"}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ))}
+                {!currentVideo ? (
+                  <div className="text-center py-8">
+                    <Scissors className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      Envie um vídeo para ver os cortes
+                    </p>
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <Video className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum vídeo analisado ainda
-                    </p>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      {currentVideo.cuts.map((cut, index) => (
+                        <div
+                          key={cut.id}
+                          className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                            selectedCuts.has(cut.id) ? "bg-primary/10 border-primary" : "hover:bg-muted"
+                          }`}
+                          onClick={() => toggleCutSelection(cut.id)}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge variant="outline">Corte {index + 1}</Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {formatTime(cut.startTime)} - {formatTime(cut.endTime)}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({Math.floor((cut.endTime - cut.startTime) / 60)}min)
+                                </span>
+                              </div>
+                              <p className="text-sm">{cut.description}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {selectedCuts.size > 0 && (
+                      <div className="space-y-4 pt-4 border-t">
+                        <div className="space-y-2">
+                          <Label>Formato de Saída</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              variant={selectedFormat === "vertical" ? "default" : "outline"}
+                              onClick={() => setSelectedFormat("vertical")}
+                              className="w-full"
+                            >
+                              <Smartphone className="h-4 w-4 mr-2" />
+                              Reels (9:16)
+                            </Button>
+                            <Button
+                              variant={selectedFormat === "horizontal" ? "default" : "outline"}
+                              onClick={() => setSelectedFormat("horizontal")}
+                              className="w-full"
+                            >
+                              <MonitorPlay className="h-4 w-4 mr-2" />
+                              HD (16:9)
+                            </Button>
+                          </div>
+                        </div>
+
+                        <Button
+                          onClick={handleProcessCuts}
+                          disabled={isProcessing}
+                          className="w-full"
+                        >
+                          {processMutation.isPending ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Processando com IA...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4 mr-2" />
+                              Processar {selectedCuts.size} {selectedCuts.size === 1 ? "Corte" : "Cortes"}
+                            </>
+                          )}
+                        </Button>
+                        <p className="text-xs text-muted-foreground text-center">
+                          A IA irá cortar, ajustar formato e gerar legendas automáticas
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

@@ -5,11 +5,17 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
+import Accounts from "@/pages/Accounts";
+import OAuthSetup from "@/pages/OAuthSetup";
+import OAuthCallback from "@/pages/OAuthCallback";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/accounts" component={Accounts} />
+      <Route path="/oauth/setup" component={OAuthSetup} />
+      <Route path="/oauth/callback" component={OAuthCallback} />
       <Route component={NotFound} />
     </Switch>
   );

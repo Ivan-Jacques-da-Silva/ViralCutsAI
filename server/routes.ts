@@ -4,13 +4,22 @@ import { storage } from "./storage";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { analyzeVideo } from "./gemini";
-import { insertVideoSchema } from "@shared/schema";
+import { analyzeVideoForCuts, generateSubtitles } from "./gemini";
 import { isSocialMediaUrl, downloadVideoFromPlatform } from "./video-downloader";
+import { cutVideo, addSubtitlesToVideo } from "./video-processor";
 
 const uploadDir = path.join(process.cwd(), "uploads");
+const processedDir = path.join(process.cwd(), "processed");
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
+}
+if (!fs.existsSync(processedDir)) {
+  fs.mkdirSync(processedDir, { recursive: true });
+}
+
+function sanitizeFilename(filename: string): string {
+  return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
 }
 
 const upload = multer({
@@ -19,7 +28,8 @@ const upload = multer({
       cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
-      const uniqueName = `${Date.now()}-${file.originalname}`;
+      const sanitized = sanitizeFilename(file.originalname);
+      const uniqueName = `${Date.now()}-${sanitized}`;
       cb(null, uniqueName);
     },
   }),
@@ -31,7 +41,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 100 * 1024 * 1024,
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB
   },
 });
 
@@ -45,16 +55,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { title } = req.body;
       const videoPath = req.file.path;
 
-      const analysis = await analyzeVideo(videoPath);
-
       const video = await storage.createVideo({
         title: title || req.file.originalname,
         videoPath,
         source: "upload",
-        analysis,
       });
 
-      res.json(video);
+      const cuts = await analyzeVideoForCuts(videoPath);
+
+      for (const cut of cuts) {
+        await storage.createVideoCut({
+          videoId: video.id,
+          startTime: cut.startTime,
+          endTime: cut.endTime,
+          description: cut.description,
+        });
+      }
+
+      const videoCuts = await storage.getVideoCutsByVideoId(video.id);
+
+      res.json({ video, cuts: videoCuts });
     } catch (error: any) {
       console.error("Erro no upload:", error);
       res.status(500).json({ error: error.message || "Erro ao processar vídeo" });
@@ -112,7 +132,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "Vídeo muito grande (máximo 100MB)" });
         }
 
-        const filename = `${Date.now()}-${path.basename(url) || "video.mp4"}`;
+        const urlBasename = sanitizeFilename(path.basename(url) || "video.mp4");
+        const filename = `${Date.now()}-${urlBasename}`;
         videoPath = path.join(uploadDir, filename);
 
         const writeStream = fs.createWriteStream(videoPath);
@@ -161,16 +182,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         videoTitle = title || filename;
       }
 
-      const analysis = await analyzeVideo(videoPath);
-
       const video = await storage.createVideo({
         title: videoTitle,
         videoPath,
         source: "url",
-        analysis,
       });
 
-      res.json(video);
+      const cuts = await analyzeVideoForCuts(videoPath);
+
+      for (const cut of cuts) {
+        await storage.createVideoCut({
+          videoId: video.id,
+          startTime: cut.startTime,
+          endTime: cut.endTime,
+          description: cut.description,
+        });
+      }
+
+      const videoCuts = await storage.getVideoCutsByVideoId(video.id);
+
+      res.json({ video, cuts: videoCuts });
     } catch (error: any) {
       console.error("Erro ao processar URL:", error);
       res.status(500).json({ error: error.message || "Erro ao processar vídeo" });
@@ -193,61 +224,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!video) {
         return res.status(404).json({ error: "Vídeo não encontrado" });
       }
-      res.json(video);
+      const cuts = await storage.getVideoCutsByVideoId(video.id);
+      res.json({ video, cuts });
     } catch (error: any) {
       console.error("Erro ao buscar vídeo:", error);
       res.status(500).json({ error: error.message || "Erro ao buscar vídeo" });
     }
   });
 
-  app.get("/api/videos/:id/stream", async (req, res) => {
+  app.get("/api/videos/:videoId/cuts", async (req, res) => {
     try {
-      const video = await storage.getVideo(req.params.id);
+      const cuts = await storage.getVideoCutsByVideoId(req.params.videoId);
+      res.json(cuts);
+    } catch (error: any) {
+      console.error("Erro ao listar cortes:", error);
+      res.status(500).json({ error: error.message || "Erro ao listar cortes" });
+    }
+  });
+
+  app.post("/api/cuts/:cutId/process", async (req, res) => {
+    try {
+      const { cutId } = req.params;
+      const { format } = req.body;
+
+      if (!format || (format !== "horizontal" && format !== "vertical")) {
+        return res.status(400).json({ error: "Formato inválido. Use 'horizontal' ou 'vertical'" });
+      }
+
+      const cut = await storage.getVideoCut(cutId);
+      if (!cut) {
+        return res.status(404).json({ error: "Corte não encontrado" });
+      }
+
+      const video = await storage.getVideo(cut.videoId);
       if (!video) {
         return res.status(404).json({ error: "Vídeo não encontrado" });
       }
 
-      const videoPath = video.videoPath;
-      if (!fs.existsSync(videoPath)) {
-        return res.status(404).json({ error: "Arquivo de vídeo não encontrado" });
+      const subtitles = await generateSubtitles(video.videoPath, cut.startTime, cut.endTime);
+
+      let outputPath = await cutVideo(
+        video.videoPath,
+        cut.startTime,
+        cut.endTime,
+        format,
+        processedDir
+      );
+
+      if (subtitles) {
+        outputPath = await addSubtitlesToVideo(outputPath, subtitles, processedDir);
       }
 
-      const stat = fs.statSync(videoPath);
-      const fileSize = stat.size;
-      const range = req.headers.range;
+      const processedCut = await storage.createProcessedCut({
+        cutId: cut.id,
+        format,
+        outputPath,
+        subtitles: subtitles || null,
+      });
 
-      const ext = path.extname(videoPath).toLowerCase();
-      const contentType = ext === ".webm"
-        ? "video/webm"
-        : ext === ".mkv"
-        ? "video/x-matroska"
-        : "video/mp4";
-
-      if (range) {
-        const parts = range.replace(/bytes=/, "").split("-");
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const chunksize = end - start + 1;
-        const file = fs.createReadStream(videoPath, { start, end });
-        const head = {
-          "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-          "Accept-Ranges": "bytes",
-          "Content-Length": chunksize,
-          "Content-Type": contentType,
-        };
-        res.writeHead(206, head);
-        file.pipe(res);
-      } else {
-        const head = {
-          "Content-Length": fileSize,
-          "Content-Type": contentType,
-        };
-        res.writeHead(200, head);
-        fs.createReadStream(videoPath).pipe(res);
-      }
+      res.json(processedCut);
     } catch (error: any) {
-      console.error("Erro ao fazer stream do vídeo:", error);
-      res.status(500).json({ error: error.message || "Erro ao fazer stream do vídeo" });
+      console.error("Erro ao processar corte:", error);
+      res.status(500).json({ error: error.message || "Erro ao processar corte" });
+    }
+  });
+
+  app.get("/api/processed/:id/download", async (req, res) => {
+    try {
+      const processed = await storage.getProcessedCut(req.params.id);
+      if (!processed) {
+        return res.status(404).json({ error: "Corte processado não encontrado" });
+      }
+
+      const filePath = processed.outputPath;
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ error: "Arquivo não encontrado" });
+      }
+
+      const filename = path.basename(filePath);
+      res.download(filePath, filename);
+    } catch (error: any) {
+      console.error("Erro ao fazer download:", error);
+      res.status(500).json({ error: error.message || "Erro ao fazer download" });
     }
   });
 

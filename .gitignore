@@ -1,0 +1,45 @@
+node_modules
+dist
+.env
+database.db
+uploads/
+*.log
+.DS_Store
+
+# Prevent committing large/binary media and outputs
+processed/
+downloads/
+
+# Video files
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.avi
+*.m4v
+
+# Audio files
+*.mp3
+*.wav
+*.flac
+*.aac
+*.ogg
+*.opus
+*.m4a
+
+# Subtitle/sidecar
+*.srt
+*.vtt
+
+# Archives and big bundles
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# Download/temp fragments
+*.part
+*.ytdl
+*-Frag*.part
+*.crdownload
