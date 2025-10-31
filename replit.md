@@ -2,10 +2,31 @@
 
 This is a video cutting system for Reels with two main workflows:
 
-1. **Local Upload**: Users upload video files and manually cut them
+1. **Local Upload**: Users upload video files and the AI analyzes them for viral moments
 2. **URL Download**: Users provide YouTube/Instagram/TikTok URLs for automatic video download and AI-powered analysis
 
-The application uses AI (Google Gemini) to analyze video content and generate intelligent cuts optimized for social media Reels format.
+The application uses AI (Google Gemini) to analyze video content and identify moments with **high viral potential** optimized for social media Reels format. The AI focuses on emotional content, revelations, strong hooks, dramatic moments, memorable phrases, and impactful visuals.
+
+# Recent Updates (October 31, 2025)
+
+## AI Analysis Enhancement
+- Improved AI prompt to specifically identify **viral moments** instead of generic cuts
+- AI now prioritizes: emotional content, insights/revelations, strong hooks, dramatic climaxes, memorable quotes, and impactful visuals
+- Quality over quantity approach - fewer but more impactful cuts
+
+## Manual Adjustment Interface
+- Added precision controls in VideoPreview modal:
+  - +/-5 seconds and +/-1 second buttons for quick adjustments
+  - Numeric inputs for exact second-level control
+  - Visual sliders for intuitive adjustment
+  - Real-time video preview with adjustable range
+- Improved visual feedback showing selected cut duration
+
+## User Experience
+- Enhanced cut visualization with highlighted cards
+- Clear indicators for selected cuts
+- Better messaging about viral potential
+- Visual emphasis on AI-identified moments
 
 # User Preferences
 
