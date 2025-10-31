@@ -38,13 +38,12 @@ export async function cutVideo(
       "-i", inputPath,
       "-ss", startTime.toString(),
       "-to", endTime.toString(),
+      "-map", "0:v:0",
+      "-map", "0:a:0?",
     ];
 
     if (format === "vertical") {
       args.push(
-        // garanta que o áudio seja mantido se existir
-        "-map", "0:v:0",
-        "-map", "0:a:0?",
         "-vf", "crop=ih*9/16:ih,scale=1080:1920",
         "-c:v", "libx264",
         "-preset", "fast",
@@ -55,9 +54,6 @@ export async function cutVideo(
       );
     } else {
       args.push(
-        // garanta que o áudio seja mantido se existir
-        "-map", "0:v:0",
-        "-map", "0:a:0?",
         "-vf", "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2",
         "-c:v", "libx264",
         "-preset", "fast",
