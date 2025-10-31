@@ -45,6 +45,7 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_gemini:1.0.0", "javascript_database:1.0.0"]
+expertMode = true
 
 [agent.capabilities]
 # Permitir que o Agent modifique todos os arquivos do projeto
