@@ -1,4 +1,3 @@
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -23,6 +22,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   const [startTime, setStartTime] = useState(cut.startTime);
   const [endTime, setEndTime] = useState(cut.endTime);
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const videoPath = `/api/videos/${video.id}/stream`;
 
   useEffect(() => {
     setStartTime(cut.startTime);
@@ -43,12 +43,29 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     };
 
     const handleTimeUpdate = () => {
-      const newTime = video.currentTime;
-      setCurrentTime(newTime);
-      if (newTime >= endTime && isPlaying) {
-        video.pause();
-        setIsPlaying(false);
+      if (!videoRef.current) return;
+
+      const newTime = videoRef.current.currentTime;
+
+      // Se passou do fim, volta para o início
+      if (newTime > endTime) {
+        videoRef.current.currentTime = startTime;
+        setCurrentTime(startTime);
+        if (isPlaying) {
+          videoRef.current.pause();
+          setIsPlaying(false);
+        }
+        return;
       }
+
+      // Se está antes do início, vai para o início
+      if (newTime < startTime) {
+        videoRef.current.currentTime = startTime;
+        setCurrentTime(startTime);
+        return;
+      }
+
+      setCurrentTime(newTime);
     };
 
     const handlePlay = () => setIsPlaying(true);
@@ -76,20 +93,35 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   }, [startTime, endTime, isPlaying, open]);
 
   const togglePlayPause = async () => {
-    const video = videoRef.current;
-    if (!video || !isVideoReady) return;
+    if (!videoRef.current) return;
 
     try {
       if (isPlaying) {
-        video.pause();
+        videoRef.current.pause();
+        setIsPlaying(false);
       } else {
-        if (video.currentTime >= endTime || video.currentTime < startTime) {
-          video.currentTime = startTime;
+        // Se está no fim ou fora do range, volta para o início
+        if (currentTime >= endTime || currentTime < startTime) {
+          videoRef.current.currentTime = startTime;
+          setCurrentTime(startTime);
         }
-        await video.play();
+
+        // Garantir que o vídeo está carregado antes de dar play
+        if (videoRef.current.readyState >= 2) {
+          await videoRef.current.play();
+          setIsPlaying(true);
+        } else {
+          // Esperar carregar
+          videoRef.current.addEventListener('loadeddata', async () => {
+            if (videoRef.current) {
+              await videoRef.current.play();
+              setIsPlaying(true);
+            }
+          }, { once: true });
+        }
       }
     } catch (error) {
-      console.error("Erro ao reproduzir vídeo:", error);
+      console.error('Erro ao reproduzir vídeo:', error);
       setIsPlaying(false);
     }
   };
@@ -135,7 +167,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   const previewSegment = async () => {
     const video = videoRef.current;
     if (!video || !isVideoReady) return;
-    
+
     try {
       video.currentTime = startTime;
       setCurrentTime(startTime);
@@ -157,6 +189,48 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     onOpenChange(newOpen);
   };
 
+  const handleSeek = (value: number[]) => {
+    const newTime = Math.max(startTime, Math.min(endTime, value[0]));
+    setCurrentTime(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+      // Se estiver pausado, atualiza o frame
+      if (!isPlaying) {
+        videoRef.current.currentTime = newTime;
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (videoRef.current) {
+      // Pausa o vídeo se estiver tocando
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+
+      // Define o tempo inicial
+      videoRef.current.currentTime = startTime;
+      setCurrentTime(startTime);
+
+      // Adiciona listener para quando o vídeo carregar
+      const handleLoadedMetadata = () => {
+        if (videoRef.current) {
+          videoRef.current.currentTime = startTime;
+          setCurrentTime(startTime);
+        }
+      };
+
+      videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        }
+      };
+    }
+  }, [startTime, videoPath]);
+
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -171,12 +245,12 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
           <div className="relative bg-black rounded-lg overflow-hidden">
             <video
               ref={videoRef}
-              src={`/api/videos/${video.id}/stream`}
+              src={videoPath}
               className="w-full"
               data-testid="video-preview-player"
               preload="metadata"
             />
-            
+
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
               <div className="flex items-center gap-3">
                 <Button
@@ -189,7 +263,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                 >
                   {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                 </Button>
-                
+
                 <Button
                   size="icon"
                   variant="ghost"

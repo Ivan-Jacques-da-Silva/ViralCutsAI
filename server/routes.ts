@@ -137,13 +137,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         videoPath = path.join(uploadDir, filename);
 
         const writeStream = fs.createWriteStream(videoPath);
-        
+
         await new Promise((resolve, reject) => {
           if (!response.body) {
             reject(new Error("Sem corpo de resposta"));
             return;
           }
-          
+
           const reader = response.body.getReader();
           let totalBytes = 0;
           const maxSize = 100 * 1024 * 1024;
