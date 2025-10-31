@@ -341,7 +341,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                       type="number"
                       value={Math.floor(startTime)}
                       onChange={(e) => handleStartTimeChange([parseInt(e.target.value) || 0])}
-                      className="h-8 text-center font-mono"
+                      className="text-center font-mono"
                       min={0}
                       max={endTime - 1}
                       disabled={!isVideoReady}
@@ -412,7 +412,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                       type="number"
                       value={Math.floor(endTime)}
                       onChange={(e) => handleEndTimeChange([parseInt(e.target.value) || 0])}
-                      className="h-8 text-center font-mono"
+                      className="text-center font-mono"
                       min={startTime + 1}
                       max={duration}
                       disabled={!isVideoReady}

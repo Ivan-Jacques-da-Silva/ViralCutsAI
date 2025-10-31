@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Video, Upload, Link as LinkIcon, Loader2, Scissors, Download, MonitorPlay, Smartphone, Users, Eye } from "lucide-react";
+import { Video, Upload, Link as LinkIcon, Loader2, Scissors, Download, MonitorPlay, Smartphone, Users, Eye, Sparkles, TrendingUp, Zap } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -48,8 +48,8 @@ export default function Home() {
       setUploadTitle("");
       setSelectedCuts(new Set());
       toast({
-        title: "Sucesso!",
-        description: `Vídeo analisado! ${data.cuts.length} cortes identificados.`,
+        title: "Análise Completa!",
+        description: `IA identificou ${data.cuts.length} momento${data.cuts.length !== 1 ? 's' : ''} com potencial viral. Clique para visualizar e ajustar!`,
       });
     },
     onError: (error: Error) => {
@@ -72,8 +72,8 @@ export default function Home() {
       setUrlTitle("");
       setSelectedCuts(new Set());
       toast({
-        title: "Sucesso!",
-        description: `Vídeo analisado! ${data.cuts.length} cortes identificados.`,
+        title: "Análise Completa!",
+        description: `IA identificou ${data.cuts.length} momento${data.cuts.length !== 1 ? 's' : ''} com potencial viral. Clique para visualizar e ajustar!`,
       });
     },
     onError: (error: Error) => {
@@ -221,8 +221,13 @@ export default function Home() {
               <Scissors className="h-6 w-6 text-primary-foreground" />
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">Cortador de Vídeos para Reels</h1>
-              <p className="text-sm text-muted-foreground">IA identifica os melhores momentos e gera legendas automáticas</p>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                Cortador de Vídeos para Reels
+              </h1>
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-primary" />
+                IA identifica momentos virais e gera legendas automáticas
+              </p>
             </div>
             <Link href="/accounts">
               <Button variant="outline" size="sm" data-testid="button-accounts">
@@ -384,30 +389,49 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {currentVideo.cuts.map((cut, index) => (
                         <div
                           key={cut.id}
-                          className={`border rounded-lg p-3 transition-colors ${
-                            selectedCuts.has(cut.id) ? "bg-primary/10 border-primary" : "hover:bg-muted"
+                          className={`group relative border rounded-lg p-4 transition-all hover-elevate ${
+                            selectedCuts.has(cut.id) 
+                              ? "bg-primary/10 border-primary shadow-md" 
+                              : "bg-card hover:bg-muted/50"
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="absolute top-3 left-3">
+                            <div className="flex items-center gap-1">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              <Badge variant="default" className="font-semibold">
+                                #{index + 1}
+                              </Badge>
+                            </div>
+                          </div>
+                          
+                          <div className="pl-16 pr-12">
                             <div 
-                              className="flex-1 cursor-pointer"
+                              className="cursor-pointer"
                               onClick={() => toggleCutSelection(cut.id)}
                             >
-                              <div className="flex items-center gap-2 mb-1">
-                                <Badge variant="outline">Corte {index + 1}</Badge>
-                                <span className="text-xs text-muted-foreground">
-                                  {formatTime(cut.startTime)} - {formatTime(cut.endTime)}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  ({Math.floor((cut.endTime - cut.startTime) / 60)}min)
-                                </span>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Badge variant="outline" className="text-xs font-mono">
+                                  {formatTime(cut.startTime)} → {formatTime(cut.endTime)}
+                                </Badge>
+                                <Badge variant="secondary" className="text-xs">
+                                  {Math.floor((cut.endTime - cut.startTime))}s
+                                </Badge>
+                                {selectedCuts.has(cut.id) && (
+                                  <Badge variant="default" className="text-xs">
+                                    <TrendingUp className="h-3 w-3 mr-1" />
+                                    Selecionado
+                                  </Badge>
+                                )}
                               </div>
-                              <p className="text-sm">{cut.description}</p>
+                              <p className="text-sm leading-relaxed">{cut.description}</p>
                             </div>
+                          </div>
+
+                          <div className="absolute top-3 right-3 flex gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
@@ -415,11 +439,16 @@ export default function Home() {
                                 e.stopPropagation();
                                 setPreviewCut(cut);
                               }}
+                              className="h-8 w-8 p-0"
                               data-testid={`button-preview-${cut.id}`}
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
                           </div>
+
+                          {selectedCuts.has(cut.id) && (
+                            <div className="absolute inset-0 pointer-events-none rounded-lg ring-2 ring-primary ring-offset-2" />
+                          )}
                         </div>
                       ))}
                     </div>
