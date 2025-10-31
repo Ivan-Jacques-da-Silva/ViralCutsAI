@@ -254,6 +254,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Arquivo de vídeo não encontrado" });
       }
 
+      const ext = path.extname(videoPath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.mp4': 'video/mp4',
+        '.webm': 'video/webm',
+        '.mkv': 'video/x-matroska',
+        '.mov': 'video/quicktime',
+        '.avi': 'video/x-msvideo',
+        '.flv': 'video/x-flv',
+        '.wmv': 'video/x-ms-wmv',
+        '.m4v': 'video/x-m4v',
+      };
+      const contentType = mimeTypes[ext] || 'video/mp4';
+
       const stat = fs.statSync(videoPath);
       const fileSize = stat.size;
       const range = req.headers.range;
@@ -268,14 +281,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Content-Range': `bytes ${start}-${end}/${fileSize}`,
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize,
-          'Content-Type': 'video/mp4',
+          'Content-Type': contentType,
         };
         res.writeHead(206, head);
         file.pipe(res);
       } else {
         const head = {
           'Content-Length': fileSize,
-          'Content-Type': 'video/mp4',
+          'Content-Type': contentType,
         };
         res.writeHead(200, head);
         fs.createReadStream(videoPath).pipe(res);
