@@ -2,8 +2,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import type { Video, VideoCut } from "@shared/schema";
 
 interface VideoPreviewProps {
@@ -301,48 +302,164 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Início do Corte</Label>
-                <span className="text-sm font-mono text-muted-foreground">
-                  {formatTime(startTime)}
-                </span>
+            <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Clock className="h-4 w-4" />
+                Ajuste Preciso dos Tempos
               </div>
-              <Slider
-                value={[startTime]}
-                onValueChange={handleStartTimeChange}
-                max={duration || 100}
-                min={0}
-                step={0.1}
-                className="w-full"
-                data-testid="slider-start-time"
-                disabled={!isVideoReady}
-              />
+              
+              <div className="space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm">Início do Corte</Label>
+                    <span className="text-sm font-mono font-bold text-primary">
+                      {formatTime(startTime)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleStartTimeChange([Math.max(0, startTime - 5)])}
+                      disabled={!isVideoReady || startTime <= 0}
+                      data-testid="button-start-minus-5"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                      5s
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleStartTimeChange([Math.max(0, startTime - 1)])}
+                      disabled={!isVideoReady || startTime <= 0}
+                      data-testid="button-start-minus-1"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                      1s
+                    </Button>
+                    <Input
+                      type="number"
+                      value={Math.floor(startTime)}
+                      onChange={(e) => handleStartTimeChange([parseInt(e.target.value) || 0])}
+                      className="h-8 text-center font-mono"
+                      min={0}
+                      max={endTime - 1}
+                      disabled={!isVideoReady}
+                      data-testid="input-start-time"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleStartTimeChange([Math.min(endTime - 1, startTime + 1)])}
+                      disabled={!isVideoReady || startTime >= endTime - 1}
+                      data-testid="button-start-plus-1"
+                    >
+                      1s
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleStartTimeChange([Math.min(endTime - 1, startTime + 5)])}
+                      disabled={!isVideoReady || startTime >= endTime - 1}
+                      data-testid="button-start-plus-5"
+                    >
+                      5s
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Slider
+                    value={[startTime]}
+                    onValueChange={handleStartTimeChange}
+                    max={duration || 100}
+                    min={0}
+                    step={0.5}
+                    className="w-full"
+                    data-testid="slider-start-time"
+                    disabled={!isVideoReady}
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm">Fim do Corte</Label>
+                    <span className="text-sm font-mono font-bold text-primary">
+                      {formatTime(endTime)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEndTimeChange([Math.max(startTime + 1, endTime - 5)])}
+                      disabled={!isVideoReady || endTime <= startTime + 1}
+                      data-testid="button-end-minus-5"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                      5s
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEndTimeChange([Math.max(startTime + 1, endTime - 1)])}
+                      disabled={!isVideoReady || endTime <= startTime + 1}
+                      data-testid="button-end-minus-1"
+                    >
+                      <ChevronLeft className="h-3 w-3" />
+                      1s
+                    </Button>
+                    <Input
+                      type="number"
+                      value={Math.floor(endTime)}
+                      onChange={(e) => handleEndTimeChange([parseInt(e.target.value) || 0])}
+                      className="h-8 text-center font-mono"
+                      min={startTime + 1}
+                      max={duration}
+                      disabled={!isVideoReady}
+                      data-testid="input-end-time"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEndTimeChange([Math.min(duration, endTime + 1)])}
+                      disabled={!isVideoReady || endTime >= duration}
+                      data-testid="button-end-plus-1"
+                    >
+                      1s
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEndTimeChange([Math.min(duration, endTime + 5)])}
+                      disabled={!isVideoReady || endTime >= duration}
+                      data-testid="button-end-plus-5"
+                    >
+                      5s
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <Slider
+                    value={[endTime]}
+                    onValueChange={handleEndTimeChange}
+                    max={duration || 100}
+                    min={0}
+                    step={0.5}
+                    className="w-full"
+                    data-testid="slider-end-time"
+                    disabled={!isVideoReady}
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Fim do Corte</Label>
-                <span className="text-sm font-mono text-muted-foreground">
-                  {formatTime(endTime)}
-                </span>
+            <div className="flex items-center justify-between p-4 bg-primary/10 rounded-lg border border-primary/20">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">Duração do corte:</span>
               </div>
-              <Slider
-                value={[endTime]}
-                onValueChange={handleEndTimeChange}
-                max={duration || 100}
-                min={0}
-                step={0.1}
-                className="w-full"
-                data-testid="slider-end-time"
-                disabled={!isVideoReady}
-              />
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-              <span className="text-sm text-muted-foreground">Duração do corte:</span>
-              <span className="text-sm font-semibold">
-                {formatTime(endTime - startTime)} ({Math.floor((endTime - startTime) / 60)} min)
+              <span className="text-lg font-bold text-primary">
+                {formatTime(endTime - startTime)} ({Math.floor((endTime - startTime))} seg)
               </span>
             </div>
           </div>

@@ -115,23 +115,43 @@ export async function analyzeVideoForCuts(
       },
       `Analise este vídeo completo que tem ${duration} segundos de duração.
 
-Identifique os melhores momentos para criar cortes para Reels/Stories, seguindo estas regras OBRIGATÓRIAS:
+OBJETIVO: Identificar momentos com ALTO POTENCIAL VIRAL para Reels/Stories que vão CHAMAR A ATENÇÃO e IMPACTAR o público.
+
+CRITÉRIOS PARA MOMENTOS VIRAIS (priorize nesta ordem):
+1. 🔥 CONTEÚDO EMOTIVO: Momentos que provocam emoções fortes (riso, surpresa, inspiração, emoção)
+2. 💡 REVELAÇÕES/INSIGHTS: Informações valiosas, segredos revelados, dicas práticas
+3. 🎯 GANCHOS FORTES: Começa com algo que prende atenção imediatamente (pergunta intrigante, afirmação polêmica, situação dramática)
+4. 🎬 CLÍMAX/MOMENTOS DRAMÁTICOS: Ponto alto da narrativa, reviravolta, conclusão impactante
+5. 💬 FRASES DE EFEITO: Citações memoráveis, declarações marcantes
+6. 🎨 VISUAL IMPACTANTE: Cenas visualmente impressionantes ou diferenciadas
+
+REGRAS OBRIGATÓRIAS:
 - Cada corte deve ter entre 60 e 120 segundos (1-2 minutos)
-- NÃO crie cortes abruptos no meio de uma frase ou ação
-- Identifique momentos naturais de início e fim (início de nova cena, nova fala, novo tópico)
-- Priorize segmentos com conteúdo interessante e engajador
-- Evite momentos de silêncio ou transição no início/fim dos cortes
+- COMECE o corte exatamente onde o gancho/momento viral acontece (não desperdice segundos iniciais)
+- TERMINE em um ponto natural e satisfatório (conclusão de pensamento, resposta completa, fim de história)
+- NÃO corte no meio de uma frase importante ou ação dramática
+- O início deve ser MAGNÉTICO - algo que faz o espectador parar de rolar
+- Priorize QUALIDADE sobre quantidade - melhor 2 cortes EXCELENTES que 5 medianos
+
+DESCRIÇÃO: Seja específico sobre POR QUE este momento é viral. Exemplos:
+❌ "Fala sobre tema X"
+✅ "Revela segredo surpreendente sobre X que ninguém sabia + conclusão impactante"
+✅ "Momento emocionante onde conta história pessoal + lição de vida poderosa"
+✅ "Responde pergunta polêmica com argumento convincente + virada inesperada"
 
 Retorne sua resposta EXATAMENTE neste formato JSON (sem texto adicional):
 [
   {
     "startTime": tempo_inicial_em_segundos,
     "endTime": tempo_final_em_segundos,
-    "description": "Descrição breve do que acontece neste segmento"
+    "description": "Por que é viral: [explicação específica do potencial viral]"
   }
 ]
 
-IMPORTANTE: O tempo deve ser em segundos inteiros. Cada corte deve ter duração mínima de 60s e máxima de 120s.`,
+IMPORTANTE: 
+- Tempos em segundos inteiros
+- Se não encontrar momentos com real potencial viral, retorne menos cortes (qualidade > quantidade)
+- Cada corte deve ser uma "mini-história" completa e impactante`,
     ];
 
     const response = await ai.models.generateContent({
