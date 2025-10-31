@@ -5,12 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Video, Upload, Link as LinkIcon, Loader2, Scissors, Download, MonitorPlay, Smartphone, Users } from "lucide-react";
+import { Video, Upload, Link as LinkIcon, Loader2, Scissors, Download, MonitorPlay, Smartphone, Users, Eye } from "lucide-react";
 import { Link } from "wouter";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Video as VideoType, VideoCut, ProcessedCut } from "@shared/schema";
+import VideoPreview from "@/components/VideoPreview";
 
 interface UploadResponse {
   video: VideoType;
@@ -26,6 +27,7 @@ export default function Home() {
   const [currentVideo, setCurrentVideo] = useState<UploadResponse | null>(null);
   const [selectedCuts, setSelectedCuts] = useState<Set<string>>(new Set());
   const [selectedFormat, setSelectedFormat] = useState<"horizontal" | "vertical">("vertical");
+  const [previewCut, setPreviewCut] = useState<VideoCut | null>(null);
   const { toast } = useToast();
 
   const uploadMutation = useMutation({
@@ -94,6 +96,32 @@ export default function Home() {
         description: "Corte processado com legendas!",
       });
       window.open(`/api/processed/${data.id}/download`, "_blank");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Erro",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCutMutation = useMutation({
+    mutationFn: async ({ cutId, startTime, endTime }: { cutId: string; startTime: number; endTime: number }) => {
+      const response = await apiRequest("PUT", `/api/cuts/${cutId}`, { startTime, endTime });
+      return await response.json();
+    },
+    onSuccess: (updatedCut: VideoCut) => {
+      if (currentVideo) {
+        const updatedCuts = currentVideo.cuts.map(c => 
+          c.id === updatedCut.id ? updatedCut : c
+        );
+        setCurrentVideo({ ...currentVideo, cuts: updatedCuts });
+      }
+      toast({
+        title: "Sucesso!",
+        description: "Tempos do corte atualizados!",
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -360,13 +388,15 @@ export default function Home() {
                       {currentVideo.cuts.map((cut, index) => (
                         <div
                           key={cut.id}
-                          className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                          className={`border rounded-lg p-3 transition-colors ${
                             selectedCuts.has(cut.id) ? "bg-primary/10 border-primary" : "hover:bg-muted"
                           }`}
-                          onClick={() => toggleCutSelection(cut.id)}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
+                            <div 
+                              className="flex-1 cursor-pointer"
+                              onClick={() => toggleCutSelection(cut.id)}
+                            >
                               <div className="flex items-center gap-2 mb-1">
                                 <Badge variant="outline">Corte {index + 1}</Badge>
                                 <span className="text-xs text-muted-foreground">
@@ -378,6 +408,17 @@ export default function Home() {
                               </div>
                               <p className="text-sm">{cut.description}</p>
                             </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewCut(cut);
+                              }}
+                              data-testid={`button-preview-${cut.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -436,6 +477,18 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {previewCut && currentVideo && (
+        <VideoPreview
+          open={previewCut !== null}
+          onOpenChange={(open) => !open && setPreviewCut(null)}
+          video={currentVideo.video}
+          cut={previewCut}
+          onUpdateCut={(cutId, startTime, endTime) => {
+            updateCutMutation.mutate({ cutId, startTime, endTime });
+          }}
+        />
+      )}
     </div>
   );
 }
