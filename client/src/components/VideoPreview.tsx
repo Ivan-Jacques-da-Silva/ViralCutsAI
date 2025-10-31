@@ -1,3 +1,4 @@
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -21,6 +22,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   const [duration, setDuration] = useState(0);
   const [startTime, setStartTime] = useState(cut.startTime);
   const [endTime, setEndTime] = useState(cut.endTime);
+  const [isVideoReady, setIsVideoReady] = useState(false);
 
   useEffect(() => {
     setStartTime(cut.startTime);
@@ -33,12 +35,17 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
 
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
-      video.currentTime = startTime;
+      setIsVideoReady(true);
+      if (startTime >= 0 && startTime < video.duration) {
+        video.currentTime = startTime;
+        setCurrentTime(startTime);
+      }
     };
 
     const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
-      if (video.currentTime >= endTime) {
+      const newTime = video.currentTime;
+      setCurrentTime(newTime);
+      if (newTime >= endTime && isPlaying) {
         video.pause();
         setIsPlaying(false);
       }
@@ -46,62 +53,78 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+    const handleEnded = () => setIsPlaying(false);
 
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("timeupdate", handleTimeUpdate);
     video.addEventListener("play", handlePlay);
     video.addEventListener("pause", handlePause);
+    video.addEventListener("ended", handleEnded);
+
+    // Reset quando o diálogo abre
+    if (open && video.readyState >= 1) {
+      handleLoadedMetadata();
+    }
 
     return () => {
       video.removeEventListener("loadedmetadata", handleLoadedMetadata);
       video.removeEventListener("timeupdate", handleTimeUpdate);
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
+      video.removeEventListener("ended", handleEnded);
     };
-  }, [startTime, endTime]);
+  }, [startTime, endTime, isPlaying, open]);
 
-  const togglePlayPause = () => {
+  const togglePlayPause = async () => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !isVideoReady) return;
 
-    if (isPlaying) {
-      video.pause();
-    } else {
-      if (video.currentTime >= endTime || video.currentTime < startTime) {
-        video.currentTime = startTime;
+    try {
+      if (isPlaying) {
+        video.pause();
+      } else {
+        if (video.currentTime >= endTime || video.currentTime < startTime) {
+          video.currentTime = startTime;
+        }
+        await video.play();
       }
-      video.play();
+    } catch (error) {
+      console.error("Erro ao reproduzir vídeo:", error);
+      setIsPlaying(false);
     }
   };
 
   const resetToStart = () => {
     const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = startTime;
+    if (!video || !isVideoReady) return;
     video.pause();
+    video.currentTime = startTime;
+    setCurrentTime(startTime);
   };
 
   const formatTime = (seconds: number) => {
+    if (!isFinite(seconds)) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   const handleStartTimeChange = (value: number[]) => {
-    const newStart = value[0];
-    if (newStart < endTime) {
-      setStartTime(newStart);
-      if (videoRef.current) {
-        videoRef.current.currentTime = newStart;
-      }
+    if (!isVideoReady || !duration) return;
+    const newStart = Math.max(0, Math.min(value[0], endTime - 1));
+    setStartTime(newStart);
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = newStart;
+      setCurrentTime(newStart);
+      setIsPlaying(false);
     }
   };
 
   const handleEndTimeChange = (value: number[]) => {
-    const newEnd = value[0];
-    if (newEnd > startTime) {
-      setEndTime(newEnd);
-    }
+    if (!isVideoReady || !duration) return;
+    const newEnd = Math.max(startTime + 1, Math.min(value[0], duration));
+    setEndTime(newEnd);
   };
 
   const handleSave = () => {
@@ -109,15 +132,33 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     onOpenChange(false);
   };
 
-  const previewSegment = () => {
+  const previewSegment = async () => {
     const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = startTime;
-    video.play();
+    if (!video || !isVideoReady) return;
+    
+    try {
+      video.currentTime = startTime;
+      setCurrentTime(startTime);
+      await video.play();
+    } catch (error) {
+      console.error("Erro ao pré-visualizar segmento:", error);
+    }
+  };
+
+  const handleDialogChange = (newOpen: boolean) => {
+    if (!newOpen) {
+      // Pausa o vídeo antes de fechar
+      const video = videoRef.current;
+      if (video) {
+        video.pause();
+        setIsPlaying(false);
+      }
+    }
+    onOpenChange(newOpen);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Ajustar Corte - {video.title}</DialogTitle>
@@ -133,6 +174,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
               src={`/api/videos/${video.id}/stream`}
               className="w-full"
               data-testid="video-preview-player"
+              preload="metadata"
             />
             
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
@@ -143,6 +185,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                   onClick={togglePlayPause}
                   className="text-white hover:bg-white/20"
                   data-testid="button-play-pause"
+                  disabled={!isVideoReady}
                 >
                   {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                 </Button>
@@ -153,28 +196,29 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                   onClick={resetToStart}
                   className="text-white hover:bg-white/20"
                   data-testid="button-reset"
+                  disabled={!isVideoReady}
                 >
                   <RotateCcw className="h-5 w-5" />
                 </Button>
 
                 <div className="flex-1 flex items-center gap-2">
-                  <span className="text-white text-sm font-mono">
+                  <span className="text-white text-sm font-mono min-w-[40px]">
                     {formatTime(currentTime)}
                   </span>
                   <div className="flex-1 h-1 bg-white/30 rounded-full relative">
                     <div 
-                      className="absolute h-full bg-primary rounded-full"
-                      style={{ width: `${(currentTime / duration) * 100}%` }}
+                      className="absolute h-full bg-primary rounded-full transition-all"
+                      style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
                     />
                     <div 
                       className="absolute h-full bg-yellow-500/50"
                       style={{ 
-                        left: `${(startTime / duration) * 100}%`,
-                        width: `${((endTime - startTime) / duration) * 100}%`
+                        left: duration > 0 ? `${(startTime / duration) * 100}%` : '0%',
+                        width: duration > 0 ? `${((endTime - startTime) / duration) * 100}%` : '0%'
                       }}
                     />
                   </div>
-                  <span className="text-white text-sm font-mono">
+                  <span className="text-white text-sm font-mono min-w-[40px]">
                     {formatTime(duration)}
                   </span>
                 </div>
@@ -193,10 +237,12 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
               <Slider
                 value={[startTime]}
                 onValueChange={handleStartTimeChange}
-                max={duration}
+                max={duration || 100}
+                min={0}
                 step={0.1}
                 className="w-full"
                 data-testid="slider-start-time"
+                disabled={!isVideoReady}
               />
             </div>
 
@@ -210,10 +256,12 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
               <Slider
                 value={[endTime]}
                 onValueChange={handleEndTimeChange}
-                max={duration}
+                max={duration || 100}
+                min={0}
                 step={0.1}
                 className="w-full"
                 data-testid="slider-end-time"
+                disabled={!isVideoReady}
               />
             </div>
 
@@ -231,6 +279,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
               variant="outline"
               className="flex-1"
               data-testid="button-preview-segment"
+              disabled={!isVideoReady}
             >
               <Play className="h-4 w-4 mr-2" />
               Pré-visualizar Segmento
