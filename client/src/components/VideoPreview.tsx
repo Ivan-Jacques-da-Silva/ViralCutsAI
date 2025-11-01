@@ -41,6 +41,11 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
       console.log('Carregando vídeo:', videoPath);
       console.log('Video ID:', video.id);
       console.log('Video objeto completo:', video);
+      
+      // Reseta o src para forçar o reload
+      const currentSrc = videoRef.current.src;
+      videoRef.current.src = '';
+      videoRef.current.src = currentSrc;
       videoRef.current.load();
     }
   }, [open, videoPath, video]);
@@ -115,28 +120,69 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     };
 
     const handleCanPlay = () => {
-      console.log('Vídeo pronto para reproduzir');
+      console.log('Vídeo pronto para reproduzir (canplay)');
+      if (!isVideoReady && videoElement.duration > 0) {
+        console.log('Definindo vídeo como pronto via canplay');
+        setDuration(videoElement.duration);
+        setIsVideoReady(true);
+        setLoadError(null);
+        
+        if (startTime >= 0 && startTime < videoElement.duration) {
+          videoElement.currentTime = startTime;
+          setCurrentTime(startTime);
+        }
+      }
+    };
+
+    const handleLoadedData = () => {
+      console.log('Dados do vídeo carregados (loadeddata)');
+      if (!isVideoReady && videoElement.duration > 0) {
+        console.log('Definindo vídeo como pronto via loadeddata');
+        setDuration(videoElement.duration);
+        setIsVideoReady(true);
+        setLoadError(null);
+        
+        if (startTime >= 0 && startTime < videoElement.duration) {
+          videoElement.currentTime = startTime;
+          setCurrentTime(startTime);
+        }
+      }
+    };
+
+    const handleCanPlayThrough = () => {
+      console.log('Vídeo pode ser reproduzido completamente (canplaythrough)');
     };
 
     videoElement.addEventListener("loadedmetadata", handleLoadedMetadata);
+    videoElement.addEventListener("loadeddata", handleLoadedData);
+    videoElement.addEventListener("canplay", handleCanPlay);
+    videoElement.addEventListener("canplaythrough", handleCanPlayThrough);
     videoElement.addEventListener("timeupdate", handleTimeUpdate);
     videoElement.addEventListener("play", handlePlay);
     videoElement.addEventListener("pause", handlePause);
     videoElement.addEventListener("error", handleError);
-    videoElement.addEventListener("canplay", handleCanPlay);
 
     // Se o vídeo já tem metadata carregada
     if (videoElement.readyState >= 1) {
+      console.log('Vídeo já tem readyState:', videoElement.readyState);
       handleLoadedMetadata();
+    }
+
+    // Se o vídeo já pode ser reproduzido
+    if (videoElement.readyState >= 3) {
+      console.log('Vídeo já pode ser reproduzido');
+      handleCanPlay();
     }
 
     return () => {
       videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      videoElement.removeEventListener("loadeddata", handleLoadedData);
+      videoElement.removeEventListener("canplay", handleCanPlay);
+      videoElement.removeEventListener("canplaythrough", handleCanPlayThrough);
       videoElement.removeEventListener("timeupdate", handleTimeUpdate);
       videoElement.removeEventListener("play", handlePlay);
       videoElement.removeEventListener("pause", handlePause);
       videoElement.removeEventListener("error", handleError);
-      videoElement.removeEventListener("canplay", handleCanPlay);
     };
   }, [startTime, endTime, isPlaying]);
 
@@ -264,7 +310,9 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
               src={videoPath}
               className={`w-full ${!isVideoReady && !loadError ? 'opacity-0' : 'opacity-100'}`}
               data-testid="video-preview-player"
-              preload="metadata"
+              preload="auto"
+              crossOrigin="anonymous"
+              playsInline
             />
 
             {!isVideoReady && !loadError && (
