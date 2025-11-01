@@ -24,6 +24,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   const [startTime, setStartTime] = useState(cut.startTime);
   const [endTime, setEndTime] = useState(cut.endTime);
   const [isVideoReady, setIsVideoReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const videoPath = `/api/videos/${video.id}/stream`;
 
   // Atualiza os tempos quando o cut mudar
@@ -32,14 +33,28 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     setEndTime(cut.endTime);
   }, [cut.startTime, cut.endTime]);
 
+  // Força o carregamento do vídeo quando o modal abre
+  useEffect(() => {
+    if (open && videoRef.current) {
+      setIsVideoReady(false);
+      setLoadError(null);
+      console.log('Carregando vídeo:', videoPath);
+      videoRef.current.load();
+    }
+  }, [open, videoPath]);
+
   // Setup do vídeo e event listeners
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
     const handleLoadedMetadata = () => {
+      console.log('Metadata carregada! Duração:', videoElement.duration);
       setDuration(videoElement.duration);
       setIsVideoReady(true);
+      setLoadError(null);
+      
+      // Posiciona no tempo de início
       if (startTime >= 0 && startTime < videoElement.duration) {
         videoElement.currentTime = startTime;
         setCurrentTime(startTime);
@@ -73,14 +88,43 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
+    
+    const handleError = (e: Event) => {
+      console.error('Erro ao carregar vídeo:', e);
+      const error = videoElement.error;
+      if (error) {
+        let errorMessage = 'Erro ao carregar vídeo';
+        switch (error.code) {
+          case MediaError.MEDIA_ERR_ABORTED:
+            errorMessage = 'Carregamento abortado';
+            break;
+          case MediaError.MEDIA_ERR_NETWORK:
+            errorMessage = 'Erro de rede ao carregar vídeo';
+            break;
+          case MediaError.MEDIA_ERR_DECODE:
+            errorMessage = 'Erro ao decodificar vídeo';
+            break;
+          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            errorMessage = 'Formato de vídeo não suportado';
+            break;
+        }
+        setLoadError(errorMessage);
+      }
+    };
+
+    const handleCanPlay = () => {
+      console.log('Vídeo pronto para reproduzir');
+    };
 
     videoElement.addEventListener("loadedmetadata", handleLoadedMetadata);
     videoElement.addEventListener("timeupdate", handleTimeUpdate);
     videoElement.addEventListener("play", handlePlay);
     videoElement.addEventListener("pause", handlePause);
+    videoElement.addEventListener("error", handleError);
+    videoElement.addEventListener("canplay", handleCanPlay);
 
-    // Reset quando o diálogo abre
-    if (open && videoElement.readyState >= 1) {
+    // Se o vídeo já tem metadata carregada
+    if (videoElement.readyState >= 1) {
       handleLoadedMetadata();
     }
 
@@ -89,8 +133,10 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
       videoElement.removeEventListener("timeupdate", handleTimeUpdate);
       videoElement.removeEventListener("play", handlePlay);
       videoElement.removeEventListener("pause", handlePause);
+      videoElement.removeEventListener("error", handleError);
+      videoElement.removeEventListener("canplay", handleCanPlay);
     };
-  }, [startTime, endTime, isPlaying, open]);
+  }, [startTime, endTime, isPlaying]);
 
   const togglePlayPause = async () => {
     if (!videoRef.current || !isVideoReady) return;
@@ -210,14 +256,42 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
         </DialogHeader>
 
         <div className="space-y-6">
-          <div className="relative bg-black rounded-lg overflow-hidden">
+          <div className="relative bg-black rounded-lg overflow-hidden min-h-[400px] flex items-center justify-center">
             <video
               ref={videoRef}
               src={videoPath}
-              className="w-full"
+              className={`w-full ${!isVideoReady && !loadError ? 'opacity-0' : 'opacity-100'}`}
               data-testid="video-preview-player"
               preload="metadata"
             />
+
+            {!isVideoReady && !loadError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                <p className="text-white text-sm">Carregando vídeo...</p>
+              </div>
+            )}
+
+            {loadError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80">
+                <div className="text-red-500 text-4xl mb-4">⚠️</div>
+                <p className="text-white text-sm font-medium mb-2">{loadError}</p>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (videoRef.current) {
+                      setLoadError(null);
+                      setIsVideoReady(false);
+                      videoRef.current.load();
+                    }
+                  }}
+                  data-testid="button-retry-video"
+                >
+                  Tentar Novamente
+                </Button>
+              </div>
+            )}
 
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
               <div className="flex items-center gap-3">
