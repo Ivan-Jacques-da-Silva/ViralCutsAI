@@ -1,3 +1,6 @@
+` tags.
+
+<replit_final_file>
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -25,27 +28,28 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   const [isVideoReady, setIsVideoReady] = useState(false);
   const videoPath = `/api/videos/${video.id}/stream`;
 
+  // Atualiza os tempos quando o cut mudar
   useEffect(() => {
     setStartTime(cut.startTime);
     setEndTime(cut.endTime);
   }, [cut.startTime, cut.endTime]);
 
+  // Setup do vídeo e event listeners
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
 
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
+      setDuration(videoElement.duration);
       setIsVideoReady(true);
-      if (startTime >= 0 && startTime < video.duration) {
-        video.currentTime = startTime;
+      if (startTime >= 0 && startTime < videoElement.duration) {
+        videoElement.currentTime = startTime;
         setCurrentTime(startTime);
       }
     };
 
     const handleTimeUpdate = () => {
       if (!videoRef.current) return;
-
       const newTime = videoRef.current.currentTime;
 
       // Se passou do fim, volta para o início
@@ -71,30 +75,27 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
 
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => setIsPlaying(false);
 
-    video.addEventListener("loadedmetadata", handleLoadedMetadata);
-    video.addEventListener("timeupdate", handleTimeUpdate);
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
-    video.addEventListener("ended", handleEnded);
+    videoElement.addEventListener("loadedmetadata", handleLoadedMetadata);
+    videoElement.addEventListener("timeupdate", handleTimeUpdate);
+    videoElement.addEventListener("play", handlePlay);
+    videoElement.addEventListener("pause", handlePause);
 
     // Reset quando o diálogo abre
-    if (open && video.readyState >= 1) {
+    if (open && videoElement.readyState >= 1) {
       handleLoadedMetadata();
     }
 
     return () => {
-      video.removeEventListener("loadedmetadata", handleLoadedMetadata);
-      video.removeEventListener("timeupdate", handleTimeUpdate);
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
-      video.removeEventListener("ended", handleEnded);
+      videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      videoElement.removeEventListener("timeupdate", handleTimeUpdate);
+      videoElement.removeEventListener("play", handlePlay);
+      videoElement.removeEventListener("pause", handlePause);
     };
   }, [startTime, endTime, isPlaying, open]);
 
   const togglePlayPause = async () => {
-    if (!videoRef.current) return;
+    if (!videoRef.current || !isVideoReady) return;
 
     try {
       if (isPlaying) {
@@ -107,19 +108,8 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
           setCurrentTime(startTime);
         }
 
-        // Garantir que o vídeo está carregado antes de dar play
-        if (videoRef.current.readyState >= 2) {
-          await videoRef.current.play();
-          setIsPlaying(true);
-        } else {
-          // Esperar carregar
-          videoRef.current.addEventListener('loadeddata', async () => {
-            if (videoRef.current) {
-              await videoRef.current.play();
-              setIsPlaying(true);
-            }
-          }, { once: true });
-        }
+        await videoRef.current.play();
+        setIsPlaying(true);
       }
     } catch (error) {
       console.error('Erro ao reproduzir vídeo:', error);
@@ -128,11 +118,12 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   };
 
   const resetToStart = () => {
-    const video = videoRef.current;
-    if (!video || !isVideoReady) return;
-    video.pause();
-    video.currentTime = startTime;
+    const videoElement = videoRef.current;
+    if (!videoElement || !isVideoReady) return;
+    videoElement.pause();
+    videoElement.currentTime = startTime;
     setCurrentTime(startTime);
+    setIsPlaying(false);
   };
 
   const formatTime = (seconds: number) => {
@@ -146,6 +137,8 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     if (!isVideoReady || !duration) return;
     const newStart = Math.max(0, Math.min(value[0], endTime - 1));
     setStartTime(newStart);
+
+    // Atualiza o vídeo para o novo tempo
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.currentTime = newStart;
@@ -166,13 +159,14 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   };
 
   const previewSegment = async () => {
-    const video = videoRef.current;
-    if (!video || !isVideoReady) return;
+    const videoElement = videoRef.current;
+    if (!videoElement || !isVideoReady) return;
 
     try {
-      video.currentTime = startTime;
+      videoElement.currentTime = startTime;
       setCurrentTime(startTime);
-      await video.play();
+      await videoElement.play();
+      setIsPlaying(true);
     } catch (error) {
       console.error("Erro ao pré-visualizar segmento:", error);
     }
@@ -181,56 +175,14 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
   const handleDialogChange = (newOpen: boolean) => {
     if (!newOpen) {
       // Pausa o vídeo antes de fechar
-      const video = videoRef.current;
-      if (video) {
-        video.pause();
+      const videoElement = videoRef.current;
+      if (videoElement) {
+        videoElement.pause();
         setIsPlaying(false);
       }
     }
     onOpenChange(newOpen);
   };
-
-  const handleSeek = (value: number[]) => {
-    const newTime = Math.max(startTime, Math.min(endTime, value[0]));
-    setCurrentTime(newTime);
-    if (videoRef.current) {
-      videoRef.current.currentTime = newTime;
-      // Se estiver pausado, atualiza o frame
-      if (!isPlaying) {
-        videoRef.current.currentTime = newTime;
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (videoRef.current) {
-      // Pausa o vídeo se estiver tocando
-      if (isPlaying) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-
-      // Define o tempo inicial
-      videoRef.current.currentTime = startTime;
-      setCurrentTime(startTime);
-
-      // Adiciona listener para quando o vídeo carregar
-      const handleLoadedMetadata = () => {
-        if (videoRef.current) {
-          videoRef.current.currentTime = startTime;
-          setCurrentTime(startTime);
-        }
-      };
-
-      videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
-
-      return () => {
-        if (videoRef.current) {
-          videoRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        }
-      };
-    }
-  }, [startTime, videoPath]);
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
@@ -307,7 +259,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                 <Clock className="h-4 w-4" />
                 Ajuste Preciso dos Tempos
               </div>
-              
+
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between mb-2">
