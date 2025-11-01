@@ -102,15 +102,20 @@ export async function addSubtitlesToVideo(
     const outputFilename = `with_subtitles_${timestamp}.mp4`;
     const outputPath = path.join(outputDir, outputFilename);
 
-    // Build filter using only the SRT filename and run ffmpeg with cwd=outputDir to avoid Windows drive colon issues
-    const subtitlesFilter = `subtitles=filename='${srtFilename}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BorderStyle=3,Outline=2,Shadow=0,BackColour=&H00000000'`;
+    // Usar caminho absoluto e escapar corretamente para o filtro subtitles
+    // Substituir : por \: e \ por \\ para Windows/Linux compatibility
+    const escapedSrtPath = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+    
+    const subtitlesFilter = `subtitles='${escapedSrtPath}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BorderStyle=3,Outline=2,Shadow=0,BackColour=&H00000000'`;
 
     const args: string[] = [
       "-i", videoPath,
-      // mantenha o primeiro vídeo e o primeiro áudio (se existir)
       "-map", "0:v:0",
       "-map", "0:a:0?",
       "-vf", subtitlesFilter,
+      "-c:v", "libx264",
+      "-preset", "fast",
+      "-crf", "23",
       "-c:a", "copy",
       outputPath
     ];
@@ -118,9 +123,9 @@ export async function addSubtitlesToVideo(
     await execFileAsync(resolveFFmpeg(), args, {
       timeout: 300000,
       maxBuffer: 50 * 1024 * 1024,
-      cwd: outputDir,
     });
 
+    // Limpar arquivos temporários
     if (fs.existsSync(videoPath) && videoPath !== outputPath) {
       fs.unlinkSync(videoPath);
     }
