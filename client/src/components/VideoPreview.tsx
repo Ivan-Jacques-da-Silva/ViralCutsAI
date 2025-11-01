@@ -39,9 +39,11 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
       setIsVideoReady(false);
       setLoadError(null);
       console.log('Carregando vídeo:', videoPath);
+      console.log('Video ID:', video.id);
+      console.log('Video objeto completo:', video);
       videoRef.current.load();
     }
-  }, [open, videoPath]);
+  }, [open, videoPath, video]);
 
   // Setup do vídeo e event listeners
   useEffect(() => {

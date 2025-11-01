@@ -244,13 +244,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/videos/:id/stream", async (req, res) => {
     try {
-      const video = await storage.getVideo(req.params.id);
+      const videoId = req.params.id;
+      console.log('Streaming video ID:', videoId);
+      
+      const video = await storage.getVideo(videoId);
       if (!video) {
+        console.error('Vídeo não encontrado no banco:', videoId);
         return res.status(404).json({ error: "Vídeo não encontrado" });
       }
 
       const videoPath = video.videoPath;
+      console.log('Video path:', videoPath);
+      
       if (!fs.existsSync(videoPath)) {
+        console.error('Arquivo não existe:', videoPath);
         return res.status(404).json({ error: "Arquivo de vídeo não encontrado" });
       }
 
