@@ -289,6 +289,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize,
           'Content-Type': contentType,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Range',
+          'Cache-Control': 'no-cache',
         };
         res.writeHead(206, head);
         file.pipe(res);
@@ -296,6 +300,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const head = {
           'Content-Length': fileSize,
           'Content-Type': contentType,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': 'Range',
+          'Cache-Control': 'no-cache',
         };
         res.writeHead(200, head);
         fs.createReadStream(videoPath).pipe(res);
