@@ -7,8 +7,9 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useState, useRef, useEffect } from "react";
-import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Clock } from "lucide-react";
+import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, Clock, Scissors } from "lucide-react";
 import type { Video, VideoCut } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
 
 interface VideoPreviewProps {
   open: boolean;
@@ -184,13 +185,30 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
     onOpenChange(newOpen);
   };
 
+  const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isVideoReady || !duration) return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const newTime = percentage * duration;
+    
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Ajustar Corte - {video.title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Scissors className="h-5 w-5 text-primary" />
+            Ajustar Corte - {video.title}
+          </DialogTitle>
           <DialogDescription>
-            Visualize o vídeo e ajuste os tempos de início e fim do corte
+            Use a timeline abaixo para posicionar e ajustar o momento do corte. O vídeo NÃO será cortado ainda.
           </DialogDescription>
         </DialogHeader>
 
@@ -232,17 +250,29 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                   <span className="text-white text-sm font-mono min-w-[40px]">
                     {formatTime(currentTime)}
                   </span>
-                  <div className="flex-1 h-1 bg-white/30 rounded-full relative">
+                  <div 
+                    className="flex-1 h-2 bg-white/30 rounded-full relative cursor-pointer"
+                    onClick={handleTimelineClick}
+                    data-testid="timeline-scrubber"
+                  >
                     <div 
                       className="absolute h-full bg-primary rounded-full transition-all"
                       style={{ width: duration > 0 ? `${(currentTime / duration) * 100}%` : '0%' }}
                     />
                     <div 
-                      className="absolute h-full bg-yellow-500/50"
+                      className="absolute h-full bg-green-500/40"
                       style={{ 
                         left: duration > 0 ? `${(startTime / duration) * 100}%` : '0%',
                         width: duration > 0 ? `${((endTime - startTime) / duration) * 100}%` : '0%'
                       }}
+                    />
+                    <div 
+                      className="absolute top-1/2 -translate-y-1/2 w-1 h-4 bg-green-500 rounded-full"
+                      style={{ left: duration > 0 ? `${(startTime / duration) * 100}%` : '0%' }}
+                    />
+                    <div 
+                      className="absolute top-1/2 -translate-y-1/2 w-1 h-4 bg-red-500 rounded-full"
+                      style={{ left: duration > 0 ? `${(endTime / duration) * 100}%` : '0%' }}
                     />
                   </div>
                   <span className="text-white text-sm font-mono min-w-[40px]">
@@ -254,21 +284,35 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
           </div>
 
           <div className="space-y-4">
-            <div className="space-y-3 p-4 bg-muted/50 rounded-lg border">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Clock className="h-4 w-4" />
-                Ajuste Preciso dos Tempos
+            <div className="p-4 bg-muted/30 rounded-lg border-2 border-dashed">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Scissors className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Posicionar Momento do Corte</h3>
+                </div>
+                <Badge variant="secondary" className="font-mono">
+                  {formatTime(endTime - startTime)} ({Math.floor((endTime - startTime))}s)
+                </Badge>
               </div>
+              
+              <p className="text-sm text-muted-foreground mb-4">
+                Arraste os controles ou clique nos botões para ajustar onde o corte começa e termina. 
+                Você pode reproduzir o segmento para ver como ficará.
+              </p>
 
-              <div className="space-y-3">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm">Início do Corte</Label>
-                    <span className="text-sm font-mono font-bold text-primary">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                      <Label className="text-sm font-medium">Início do Corte</Label>
+                    </div>
+                    <span className="text-sm font-mono font-bold text-green-600 dark:text-green-400">
                       {formatTime(startTime)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 mb-2">
+                  
+                  <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
@@ -293,7 +337,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                       type="number"
                       value={Math.floor(startTime)}
                       onChange={(e) => handleStartTimeChange([parseInt(e.target.value) || 0])}
-                      className="text-center font-mono"
+                      className="text-center font-mono flex-1"
                       min={0}
                       max={endTime - 1}
                       disabled={!isVideoReady}
@@ -320,6 +364,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                       <ChevronRight className="h-3 w-3" />
                     </Button>
                   </div>
+                  
                   <Slider
                     value={[startTime]}
                     onValueChange={handleStartTimeChange}
@@ -332,14 +377,18 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                   />
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-sm">Fim do Corte</Label>
-                    <span className="text-sm font-mono font-bold text-primary">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                      <Label className="text-sm font-medium">Fim do Corte</Label>
+                    </div>
+                    <span className="text-sm font-mono font-bold text-red-600 dark:text-red-400">
                       {formatTime(endTime)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 mb-2">
+                  
+                  <div className="flex items-center gap-2">
                     <Button
                       size="sm"
                       variant="outline"
@@ -364,7 +413,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                       type="number"
                       value={Math.floor(endTime)}
                       onChange={(e) => handleEndTimeChange([parseInt(e.target.value) || 0])}
-                      className="text-center font-mono"
+                      className="text-center font-mono flex-1"
                       min={startTime + 1}
                       max={duration}
                       disabled={!isVideoReady}
@@ -391,6 +440,7 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
                       <ChevronRight className="h-3 w-3" />
                     </Button>
                   </div>
+                  
                   <Slider
                     value={[endTime]}
                     onValueChange={handleEndTimeChange}
@@ -405,35 +455,50 @@ export default function VideoPreview({ open, onOpenChange, video, cut, onUpdateC
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-primary/10 rounded-lg border border-primary/20">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium">Duração do corte:</span>
+            <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg border border-primary/20">
+              <Clock className="h-5 w-5 text-primary" />
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground">Duração do Segmento</p>
+                <p className="text-lg font-bold text-primary">
+                  {formatTime(endTime - startTime)}
+                </p>
               </div>
-              <span className="text-lg font-bold text-primary">
-                {formatTime(endTime - startTime)} ({Math.floor((endTime - startTime))} seg)
-              </span>
+              <Button
+                onClick={previewSegment}
+                variant="default"
+                size="sm"
+                data-testid="button-preview-segment"
+                disabled={!isVideoReady}
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Reproduzir Segmento
+              </Button>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={previewSegment}
-              variant="outline"
-              className="flex-1"
-              data-testid="button-preview-segment"
-              disabled={!isVideoReady}
-            >
-              <Play className="h-4 w-4 mr-2" />
-              Pré-visualizar Segmento
-            </Button>
-            <Button
-              onClick={handleSave}
-              className="flex-1"
-              data-testid="button-save-cut"
-            >
-              Salvar Alterações
-            </Button>
+          <div className="flex flex-col gap-2 pt-4 border-t">
+            <p className="text-sm text-muted-foreground text-center">
+              Após ajustar, clique em "Salvar" para guardar as posições. 
+              O vídeo só será cortado quando você clicar em "Processar Cortes" na tela principal.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => onOpenChange(false)}
+                variant="outline"
+                className="flex-1"
+                data-testid="button-cancel"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSave}
+                className="flex-1"
+                data-testid="button-save-cut"
+              >
+                <Scissors className="h-4 w-4 mr-2" />
+                Salvar Posições
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
