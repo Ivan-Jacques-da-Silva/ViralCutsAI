@@ -7,26 +7,38 @@ This is a video cutting system for Reels with two main workflows:
 
 The application uses AI (Google Gemini) to analyze video content and identify moments with **high viral potential** optimized for social media Reels format. The AI focuses on emotional content, revelations, strong hooks, dramatic moments, memorable phrases, and impactful visuals.
 
-# Recent Updates (October 31, 2025)
+# Recent Updates (November 1, 2025)
 
-## AI Analysis Enhancement
+## Enhanced Video Cut Positioning System
+- **Major UX improvement**: Clarified that AI only **suggests and positions** cuts - does NOT cut automatically
+- Users can now:
+  1. View AI-suggested viral moments
+  2. Adjust start/end times precisely using interactive controls
+  3. Preview the selected segment before cutting
+  4. Save positions for later processing
+  5. Execute the actual cut only when clicking "Processar Cortes"
+
+## Improved VideoPreview Interface
+- **Interactive Timeline**:
+  - Clickable scrubber to navigate anywhere in the video
+  - Visual markers showing start (green) and end (red) positions
+  - Highlighted segment showing what will be cut
+  - Real-time playback position indicator
+- **Precision Controls**:
+  - +/-5 seconds and +/-1 second buttons for quick adjustments
+  - Direct numeric input for exact second-level control
+  - Smooth sliders for intuitive dragging
+  - All controls update video position in real-time
+- **Clear Visual Feedback**:
+  - Color-coded indicators (green=start, red=end)
+  - Segment duration display
+  - "Reproduzir Segmento" button to preview only the selected range
+  - Explicit messaging that cuts are not executed until "Processar" is clicked
+
+## AI Analysis Enhancement (October 31, 2025)
 - Improved AI prompt to specifically identify **viral moments** instead of generic cuts
 - AI now prioritizes: emotional content, insights/revelations, strong hooks, dramatic climaxes, memorable quotes, and impactful visuals
 - Quality over quantity approach - fewer but more impactful cuts
-
-## Manual Adjustment Interface
-- Added precision controls in VideoPreview modal:
-  - +/-5 seconds and +/-1 second buttons for quick adjustments
-  - Numeric inputs for exact second-level control
-  - Visual sliders for intuitive adjustment
-  - Real-time video preview with adjustable range
-- Improved visual feedback showing selected cut duration
-
-## User Experience
-- Enhanced cut visualization with highlighted cards
-- Clear indicators for selected cuts
-- Better messaging about viral potential
-- Visual emphasis on AI-identified moments
 
 # User Preferences
 
