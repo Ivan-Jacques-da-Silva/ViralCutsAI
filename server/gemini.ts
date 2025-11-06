@@ -168,6 +168,17 @@ IMPORTANTE:
 
     const cuts: VideoCutSegment[] = JSON.parse(jsonMatch[0]);
 
+    // Normaliza e valida cortes da IA (duracao flexivel) e retorna sem fallback fixo
+    const normalized = cuts
+      .map(c => ({
+        startTime: Math.max(0, Math.floor(c.startTime)),
+        endTime: Math.min(Math.floor(c.endTime), Math.floor(duration)),
+        description: c.description || "",
+      }))
+      .filter(c => c.endTime > c.startTime && c.startTime < duration);
+
+    return normalized;
+
     const validCuts = cuts.filter(cut => {
       const cutDuration = cut.endTime - cut.startTime;
       return cutDuration >= 60 && cutDuration <= 120 && cut.endTime <= duration;

@@ -383,6 +383,34 @@ export class SocialMediaManager {
   }
 
   /**
+   * Cria/Registra uma conta manualmente (para testes/integrações sem fluxo OAuth)
+   */
+  addManualAccount(input: {
+    platform: string;
+    accountId: string;
+    accountName: string;
+    accessToken: string;
+    refreshToken?: string;
+    expiresAt?: Date;
+  }): SocialMediaAccount {
+    const now = new Date();
+    const acc: SocialMediaAccount = {
+      id: `${input.platform}_${input.accountId}_${Date.now()}`,
+      platform: input.platform,
+      accountId: input.accountId,
+      accountName: input.accountName,
+      accessToken: input.accessToken,
+      refreshToken: input.refreshToken,
+      expiresAt: input.expiresAt,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.saveAccount(acc);
+    return acc;
+  }
+
+  /**
    * Desconecta uma conta
    */
   async disconnectAccount(accountId: string): Promise<boolean> {

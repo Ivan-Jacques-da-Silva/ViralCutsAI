@@ -1,4 +1,4 @@
-import { execFile } from "child_process";
+﻿import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
@@ -34,10 +34,20 @@ export async function cutVideo(
     const outputFilename = `cut_${timestamp}.mp4`;
     const outputPath = path.join(outputDir, outputFilename);
 
+    // Validar tempos e calcular duração
+    if (!fs.existsSync(inputPath)) {
+      throw new Error("Arquivo de vídeo não encontrado");
+    }
+    const clipDuration = Math.max(0, endTime - startTime);
+    if (clipDuration <= 0) {
+      throw new Error("Intervalo de corte inválido (fim deve ser maior que início)");
+    }
+
     const args: string[] = [
-      "-i", inputPath,
+      "-y",
       "-ss", startTime.toString(),
-      "-to", endTime.toString(),
+      "-t", clipDuration.toString(),
+      "-i", inputPath,
       "-map", "0:v:0",
       "-map", "0:a:0?",
     ];
@@ -50,6 +60,8 @@ export async function cutVideo(
         "-crf", "23",
         "-c:a", "aac",
         "-b:a", "128k",
+        "-movflags", "+faststart",
+        "-shortest",
         outputPath
       );
     } else {
@@ -60,6 +72,8 @@ export async function cutVideo(
         "-crf", "23",
         "-c:a", "aac",
         "-b:a", "128k",
+        "-movflags", "+faststart",
+        "-shortest",
         outputPath
       );
     }
@@ -94,21 +108,34 @@ export async function addSubtitlesToVideo(
     }
 
     const timestamp = Date.now();
-    const srtFilename = `subtitles_${timestamp}.srt`;
+    const useAss = subtitlesContent.trim().startsWith("[Script Info]");
+    const subExt = useAss ? ".ass" : ".srt";
+    const srtFilename = `subtitles_${timestamp}${subExt}`;
     const srtPath = path.join(outputDir, srtFilename);
 
     fs.writeFileSync(srtPath, subtitlesContent, "utf-8");
+    try {
+      const preview = subtitlesContent.split(/\r?\n/).slice(0, 6).join("\\n");
+      console.log(`[subtitles] SUB written: ${srtPath} length=${subtitlesContent.length} preview="${preview}"`);
+    } catch {}
+    if (!fs.existsSync(srtPath) || (fs.statSync(srtPath).size === 0)) {
+      throw new Error("Falha ao criar arquivo de legendas");
+    }
 
     const outputFilename = `with_subtitles_${timestamp}.mp4`;
     const outputPath = path.join(outputDir, outputFilename);
 
-    // Usar caminho absoluto e escapar corretamente para o filtro subtitles
-    // Substituir : por \: e \ por \\ para Windows/Linux compatibility
-    const escapedSrtPath = srtPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-    
-    const subtitlesFilter = `subtitles='${escapedSrtPath}':force_style='FontName=Arial,FontSize=24,PrimaryColour=&HFFFFFF,OutlineColour=&H000000,BorderStyle=3,Outline=2,Shadow=0,BackColour=&H00000000'`;
+    // Forma compatível no Windows: usar barras normais e citar o caminho
+    const srtPathForFilter = srtPath.replace(/\\/g, "/");
+    const escapedForFilter = srtPathForFilter
+      .replace(/:/g, "\\:")
+      .replace(/'/g, "\\'")
+      .replace(/,/g, "\\,");
+    const forceStyle = useAss ? "" : ":force_style='FontName=Arial,FontSize=28,PrimaryColour=&H00FFFFFF,OutlineColour=&H000000,BorderStyle=3,Outline=2,Shadow=0,BackColour=&H00000000'";
+    const subtitlesFilter = `subtitles=filename='${escapedForFilter}':charenc=UTF-8${forceStyle}`;
 
     const args: string[] = [
+      "-y",
       "-i", videoPath,
       "-map", "0:v:0",
       "-map", "0:a:0?",
@@ -116,7 +143,11 @@ export async function addSubtitlesToVideo(
       "-c:v", "libx264",
       "-preset", "fast",
       "-crf", "23",
-      "-c:a", "copy",
+      // reencode audio to ensure compatibility and avoid copy issues
+      "-c:a", "aac",
+      "-b:a", "128k",
+      "-movflags", "+faststart",
+      "-shortest",
       outputPath
     ];
 
@@ -130,7 +161,7 @@ export async function addSubtitlesToVideo(
       fs.unlinkSync(videoPath);
     }
 
-    if (fs.existsSync(srtPath)) {
+    if (fs.existsSync(srtPath) && process.env.KEEP_SRT !== '1') {
       fs.unlinkSync(srtPath);
     }
 

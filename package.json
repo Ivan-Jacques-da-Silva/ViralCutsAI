@@ -5,6 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
+    "dev:social": "cross-env NODE_ENV=development SOCIAL_MEDIA_ENABLED=1 tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "cross-env NODE_ENV=production node dist/index.js",
     "check": "tsc",
@@ -13,6 +14,9 @@
     "setup:reset": "node scripts/setup.js --reset"
   },
   "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "googleapis": "^140.0.1",
+    "axios": "^1.7.9",
     "@google/genai": "^1.24.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",

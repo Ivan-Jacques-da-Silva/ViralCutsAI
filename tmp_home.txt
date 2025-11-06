@@ -2,12 +2,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Video, Upload, Link as LinkIcon, Loader2, Scissors, Download, MonitorPlay, Smartphone, Users, Eye, Sparkles, TrendingUp, Zap } from "lucide-react";
 import { Link } from "wouter";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Video as VideoType, VideoCut, ProcessedCut } from "@shared/schema";
@@ -19,6 +20,7 @@ interface UploadResponse {
 }
 
 export default function Home() {
+  const LOCAL_KEY = "viralCuts.session.v1";
   const [activeTab, setActiveTab] = useState<"upload" | "url">("upload");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
@@ -28,7 +30,67 @@ export default function Home() {
   const [selectedCuts, setSelectedCuts] = useState<Set<string>>(new Set());
   const [selectedFormat, setSelectedFormat] = useState<"horizontal" | "vertical">("vertical");
   const [previewCut, setPreviewCut] = useState<VideoCut | null>(null);
+  const [recentDownloads, setRecentDownloads] = useState<ProcessedCut[]>([]);
+  const [contentByCut, setContentByCut] = useState<Record<string, { title: string; description: string; hashtags: string }>>({});
   const { toast } = useToast();
+
+  // Restore session on first load
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        currentVideo: UploadResponse | null;
+        selectedCuts: string[];
+        selectedFormat: "horizontal" | "vertical";
+        previewCutId?: string | null;
+        activeTab?: "upload" | "url";
+        uploadTitle?: string;
+        urlTitle?: string;
+        videoUrl?: string;
+        recentDownloads?: ProcessedCut[];
+      };
+
+      if (saved.currentVideo) setCurrentVideo(saved.currentVideo);
+      if (Array.isArray(saved.selectedCuts)) setSelectedCuts(new Set(saved.selectedCuts));
+      if (saved.selectedFormat === "horizontal" || saved.selectedFormat === "vertical") setSelectedFormat(saved.selectedFormat);
+      if (saved.activeTab === "upload" || saved.activeTab === "url") setActiveTab(saved.activeTab);
+      if (typeof saved.uploadTitle === "string") setUploadTitle(saved.uploadTitle);
+      if (typeof saved.urlTitle === "string") setUrlTitle(saved.urlTitle);
+      if (typeof saved.videoUrl === "string") setVideoUrl(saved.videoUrl);
+      if (Array.isArray(saved.recentDownloads)) setRecentDownloads(saved.recentDownloads);
+
+      if (saved.previewCutId && saved.currentVideo?.cuts?.length) {
+        const found = saved.currentVideo.cuts.find(c => c.id === saved.previewCutId) || null;
+        setPreviewCut(found);
+      }
+    } catch (e) {
+      console.warn("Falha ao restaurar sessÃ£o do localStorage", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist session on changes
+  useEffect(() => {
+    try {
+      const data = {
+        currentVideo,
+        selectedCuts: Array.from(selectedCuts),
+        selectedFormat,
+        previewCutId: previewCut?.id ?? null,
+        activeTab,
+        uploadTitle,
+        urlTitle,
+        videoUrl,
+        recentDownloads,
+        v: 1,
+        ts: Date.now(),
+      };
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(data));
+    } catch (e) {
+      console.warn("Falha ao salvar sessÃ£o no localStorage", e);
+    }
+  }, [currentVideo, selectedCuts, selectedFormat, previewCut, activeTab, uploadTitle, urlTitle, videoUrl, recentDownloads]);
 
   const uploadMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -95,6 +157,7 @@ export default function Home() {
         title: "Sucesso!",
         description: "Corte processado com legendas!",
       });
+      setRecentDownloads((prev) => [data, ...prev].slice(0, 20));
       window.open(`/api/processed/${data.id}/download`, "_blank");
     },
     onError: (error: Error) => {
@@ -109,6 +172,21 @@ export default function Home() {
   const updateCutMutation = useMutation({
     mutationFn: async ({ cutId, startTime, endTime }: { cutId: string; startTime: number; endTime: number }) => {
       const response = await apiRequest("PUT", `/api/cuts/${cutId}`, { startTime, endTime });
+
+
+  const generateContentMutation = useMutation({
+    mutationFn: async (cutId: string) => {
+      const res = await apiRequest("POST", `/api/cuts/${cutId}/content`, {});
+      return await res.json() as { title: string; description: string; hashtags: string };
+    },
+    onSuccess: (data, cutId) => {
+      setContentByCut(prev => ({ ...prev, [cutId]: data }));
+      toast({ title: "Conteúdo gerado!", description: "Sugestões preenchidas." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    }
+  });
       return await response.json();
     },
     onSuccess: (updatedCut: VideoCut) => {
@@ -204,6 +282,10 @@ export default function Home() {
     });
   };
 
+  const handleRedownload = (processedId: string) => {
+    window.open(`/api/processed/${processedId}/download`, "_blank");
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -229,11 +311,18 @@ export default function Home() {
                 IA identifica momentos virais e gera legendas automÃ¡ticas
               </p>
             </div>
-            <Link href="/accounts">
-              <Button variant="outline" size="sm" data-testid="button-accounts">
-                <Users className="h-4 w-4 mr-2" /> Contas
-              </Button>
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href="/social">
+                <Button variant="default" size="sm" data-testid="button-social-ai">
+                  <Sparkles className="h-4 w-4 mr-2" /> Criar com IA
+                </Button>
+              </Link>
+              <Link href="/publisher">
+                <Button variant="outline" size="sm" data-testid="button-publisher">
+                  Publicar
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -497,8 +586,64 @@ export default function Home() {
                         <p className="text-xs text-muted-foreground text-center">
                           A IA irÃ¡ cortar, ajustar formato e gerar legendas automÃ¡ticas
                         </p>
+                    <div className="space-y-4 mt-6 p-4 border rounded-lg\">
+                      <div className="flex items-center justify-between\">
+                        <Label>Conteúdo do Corte</Label>
+                        {selectedCuts.size === 1 && (
+                          <Button variant="outline\" size="sm\" onClick={() => generateContentMutation.mutate(Array.from(selectedCuts)[0])}>
+                            <Sparkles className="h-4 w-4 mr-2\" /> Gerar com IA
+                          </Button>
+                        )}
+                      </div>
+                      {selectedCuts.size !== 1 ? (
+                        <p className="text-xs text-muted-foreground\">Selecione um único corte para editar/gerar conteúdo.</p>
+                      ) : (
+                        (() => { const cid = Array.from(selectedCuts)[0]; const c = contentByCut[cid] || { title: '', description: '', hashtags: '' }; return (
+                          <div className="space-y-3\">
+                            <div className="space-y-1\">
+                              <Label>Título</Label>
+                              <Input value={c.title} onChange={e => setContentByCut(prev => ({...prev, [cid]: { ...(prev[cid]||{description:'',hashtags:'',title:''}), title: e.target.value }}))} placeholder="Título chamativo...\" />
+                            </div>
+                            <div className="space-y-1\">
+                              <Label>Descrição</Label>
+                              <Textarea rows={3} value={c.description} onChange={e => setContentByCut(prev => ({...prev, [cid]: { ...(prev[cid]||{description:'',hashtags:'',title:''}), description: e.target.value }}))} placeholder="Descrição com call-to-action...\" />
+                            </div>
+                            <div className="space-y-1\">
+                              <Label>Hashtags</Label>
+                              <Input value={c.hashtags} onChange={e => setContentByCut(prev => ({...prev, [cid]: { ...(prev[cid]||{description:'',hashtags:'',title:''}), hashtags: e.target.value }}))} placeholder="#hashtag1 #hashtag2 #hashtag3\" />
+                            </div>
+                          </div>
+                        ); })()
+                      )}
+                    </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardHeader>
+                <CardTitle>Downloads Recentes</CardTitle>
+                <CardDescription>Clipes processados nesta sessÃ£o</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {recentDownloads.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nenhum download ainda</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recentDownloads.map((p) => (
+                      <div key={p.id} className="flex items-center justify-between gap-2 border rounded-md p-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{p.format.toUpperCase()} â€¢ {p.id.slice(0, 8)}</p>
+                          <p className="text-xs text-muted-foreground truncate">{new Date((p as any).createdAt ?? Date.now()).toLocaleString()}</p>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => handleRedownload(p.id)}>
+                          <Download className="h-4 w-4 mr-2" /> Baixar
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -521,3 +666,4 @@ export default function Home() {
     </div>
   );
 }
+
