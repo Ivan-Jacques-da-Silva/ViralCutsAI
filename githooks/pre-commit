@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Blocks committing large files and media formats.
+
+set -euo pipefail
+
+# Configurable max size in MB (default 50MB). Override by env MAX_HOOK_FILE_MB.
+MAX_MB=${MAX_HOOK_FILE_MB:-50}
+MAX_BYTES=$((MAX_MB * 1024 * 1024))
+
+# Extensions to block outright
+BLOCK_EXTS=(
+  mp4 mkv webm mov avi m4v
+  mp3 wav flac aac ogg opus m4a
+  zip rar 7z tar gz
+)
+
+if [[ "${ALLOW_MEDIA_COMMITS:-}" == "1" ]]; then
+  # Allow media commits if explicitly requested
+  exit 0
+fi
+
+fail=false
+mapfile -t files < <(git diff --cached --name-only --diff-filter=AM)
+
+for f in "${files[@]}"; do
+  # Skip deleted/renamed or missing files
+  [[ -e "$f" ]] || continue
+
+  ext=${f##*.}
+  for e in "${BLOCK_EXTS[@]}"; do
+    if [[ "$ext" == "$e" ]]; then
+      echo "[pre-commit] Bloqueado: $f (extensão .$e)"
+      fail=true
+      continue 2
+    fi
+  done
+
+  # Get size of STAGED blob if possible
+  if size=$(git cat-file -s :"$f" 2>/dev/null); then
+    :
+  else
+    size=$(wc -c < "$f" | tr -d '[:space:]')
+  fi
+
+  if [[ "$size" -gt "$MAX_BYTES" ]]; then
+    echo "[pre-commit] Bloqueado: $f (tamanho $(printf '%.2f' "$(echo "$size/1048576" | bc -l)") MB > ${MAX_MB} MB)"
+    fail=true
+  fi
+done
+
+if [[ "$fail" == true ]]; then
+  echo "\nPara ignorar temporariamente, defina ALLOW_MEDIA_COMMITS=1 na chamada do commit."
+  echo "Ou ajuste a lista no hook em githooks/pre-commit."
+  exit 1
+fi
+
+exit 0
+
